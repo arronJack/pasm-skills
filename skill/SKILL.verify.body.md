@@ -1,5 +1,5 @@
 > 本文件是 **SKILL.md 的正文部分**（不含 frontmatter）。
-> `tools/build_skill.py` 会把它分别拼上 WorkBuddy / ClawHub 两套 frontmatter，产出可直接上传的包。
+> `tools/build_skill.py` 会把它分别拼上两种归档形态的 frontmatter（`zip-root` / `slug-dir`），产出可直接上传的包。
 > 之所以拆开：正文只有一份，两个平台的元数据要求不同，分开维护必然漂移。
 
 # PASM 长期验证智能体工坊

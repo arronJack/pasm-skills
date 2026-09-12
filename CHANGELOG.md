@@ -2,15 +2,64 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] — 2026-09-12
+
+### 新增 —— 产品层 `pasm_agents`（本仓的主交付物）
+
+之前的仓库只有"验证智能体"（给核心体检的质检工具），没有"能被装载使用的智能体"。
+这一版把产品层补齐：**三个真智能体 + 一个 BaseAgent**。
+
+- **`pasm_agents/base.py`** —— `BaseAgent`：观测 / 记忆 / 情绪 / 动作 / 反馈 / 持久化。
+  - `observe(text, salience=1..5, tags=[...])` 写记忆（重要度参与容量淘汰）
+  - `act()` 按人格权重 + 反馈微调后的权重选动作
+  - `feedback(kind, action=...)` **可指定"夸的是哪个动作"**
+  - `chat(text)` / `save()` / `summary()`；落盘 `~/.pasm-agents/<id>/`
+  - `_CoreAdapter`：**优先驱动 PASM 真核心**（`memory_layers` / `learning` / `emotion`），
+    拿不到才降级到内置轻量实现，并把 `tier` 字段如实暴露（`bionic` / `core` / `light`）
+- **`pasm_agents/npc.py`** —— `NpcAgent`：游戏 NPC。性格（temper/energy/play）决定动作基线，
+  记忆带重要度，长期相处会被反馈塑形；示例见 `examples/npc_quickstart.py`
+- **`pasm_agents/companion.py`** —— `ElderlyCompanion`：老人陪伴。
+  关键事实（用药 / 过敏 / 家人 / 本人）100% 直查；用药提醒；危机识别与升级（写入紧急记忆 + 返回升级信息）
+- **`pasm_agents/tutor.py`** —— `LearningTutor`：学习陪伴。
+  每个知识点 EMA 追踪掌握度、最弱优先选题、鼓励式对话；学情可直接被画像层消费
+- **`pasm_agents/cli.py`** —— `pasm-agents` 命令行：`demo` / `run` / `list` / `inspect`
+- `examples/` 三个 30 秒示例：`npc_quickstart.py` / `companion_quickstart.py` / `tutor_quickstart.py`
+
+### 新增 —— 发布物（两种归档形态）
+
+- `tools/build_skill.py` 重构：**一个正文 → 两种形态**，形态按**归档结构**命名，不按平台名
+  - `zip-root`：`SKILL.md` 直接躺在 ZIP 根目录（实测：包成 `skills/<name>/SKILL.md` 会被拒收）
+  - `slug-dir`：以 slug 命名的目录，目录里放 `SKILL.md`
+  - 支持多技能（`--name` 只构建一个）、`--zip` 顺带打 ZIP 并内置结构校验
+- `skill/SKILL.agents.body.md`：产品层技能正文（新增）
+- 技能清单新增 `pasm-agents`（v0.3.0）
+
+### 变更 —— 公开仓不携带个人环境信息
+
+- **移除硬编码的本机解释器路径**（`scenarios.py`）。改为按优先级择优：
+  `PASM_TORCH_PYTHON` → `PASM_PYTHON` → **本机配置 `pasm-skills.local.json`（gitignore）**
+  → `sys.executable` → 仓库内 `.venv` / `venv` → `py` → `python3` → `python`。
+  本机那个"带 torch 的解释器"往往在仓库外，所以走**已忽略的本机配置文件**而不是写死在代码里。
+- **回归基线不再记解释器绝对路径**，只记 `Python 版本号 + torch`（`baselines/core.json` 是入库文件，
+  不该带个人机器路径；对别人也无参考价值，档位比对只需版本号）。
+- `README.md` 目录与发布章节改写：平台专名从项目文档移出，改按形态（`zip-root` / `slug-dir`）说明；
+  补"本机配置"一节与档位优先级。
+- `docs/PUBLISH.md`（平台专名 + 个人操作细节）**移出仓库**，只留在本机发布指南里，不随公开仓分发。
+- `docs/ARCHITECTURE.md` / `docs/SERVER-NEEDS.md`：解释器候选链与定时方案改为中性表述。
+- `CHANGELOG.md` 中一处"记录 python 路径"的描述同步为"记录版本号"。
+
+### 修复
+- 技能包名与文档不一致：README 里写作 `pasm-engine-audit`，实际包名是 `pasm-longterm-verify` —— 已统一。
+
 ## [0.2.1] — 2026-09-12
 
 ### 修复
 - **`regression` 会把"换了解释器"误报成"能力消失"**。
   PASM-Lite 的具体引擎要 `import pasm_lite`（依赖 torch）才注册，用不带 torch 的解释器
   采集时清单是空的，于是 `['pasm','pasm-light'] → []` 被记成 `[FAIL] 能力消失`。
-  现在基线与采集结果都会记录 `python` 路径与 `torch` 可用性；
+  现在基线与采集结果都会记录 `python` **版本号**与 `torch` 可用性；
   两者不一致时，清单类比对自动降级为 `[WARN] 档位不同·不可比`，并提示用 `PASM_PYTHON` 固定解释器。
-  同时新增 `[OK] 采集解释器与基线一致（torch=…）` 一条显式结论。
+  同时新增 `[OK] 采集解释器档位与基线一致（Python x.y.z, torch=…）` 一条显式结论。
 - **`RepoContext.python()` 与领域场景各自挑解释器**，导致同一轮运行里
   "结构检查"和"行为检查"用的不是同一把尺子。现在统一走
   `scenarios.choose_python(prefer_torch=True)`（`PASM_PYTHON` 仍最高优先）。

@@ -23,12 +23,23 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+#: 本机私有配置（已进 .gitignore）。**公开仓里不留任何个人解释器路径**，
+#: 需要固定某个带 torch 的解释器时，在仓库根写 `pasm-skills.local.json`：
+#:     {"python": ["/path/to/python", "C:/another/python.exe"]}
+#: 它只影响本机，不会随仓库分发出去。
+LOCAL_CONF = "pasm-skills.local.json"
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
 
 # ---------------------------------------------------------------- prelude
 #: 注入到子进程的公共工具。随每个场景一起下发，保持"自包含"。
@@ -179,17 +190,49 @@ def has_torch(python: str, timeout: int = 90) -> bool:
     return ok
 
 
+def local_pythons() -> List[str]:
+    """读仓库根的 `pasm-skills.local.json` 里的本机解释器。
+
+    存在的理由：能驱动仿生档的那个解释器往往在仓库外（某个 venv / 托管运行时）。
+    把它写进代码会泄露个人路径、对别人也无效；写进环境变量又跨不了终端。
+    放一个**已被 gitignore 的**本机配置文件，两边都顾上。
+    """
+    out: List[str] = []
+    try:
+        conf = _repo_root() / LOCAL_CONF
+        if conf.is_file():
+            data = json.loads(conf.read_text(encoding="utf-8"))
+            v = data.get("python")
+            if isinstance(v, str):
+                v = [v]
+            for item in (v or []):
+                if item:
+                    # 支持 %%HOME%% 占位，配置文件里就不用写死用户名
+                    out.append(str(item).replace("%%HOME%%", str(Path.home())))
+    except Exception:                                  # noqa: BLE001
+        pass                                           # 配置坏了不该让验证跑不起来
+    return out
+
+
 def candidate_pythons() -> List[str]:
-    """候选解释器，按优先级：显式环境变量 → 当前解释器 → 本机托管 venv → PATH。"""
+    """候选解释器，按优先级：
+
+    显式环境变量 → 本机私有配置 → 当前解释器 → 仓库内 venv → PATH。
+    """
     out: List[str] = []
     for key in ("PASM_TORCH_PYTHON", "PASM_PYTHON"):
         v = os.environ.get(key)
         if v:
             out.append(v)
+    out.extend(local_pythons())
     out.append(sys.executable)
-    home = Path.home()
-    for rel in ("Scripts/python.exe", "bin/python"):
-        out.append(str(home / ".workbuddy" / "binaries" / "python" / "envs" / "default" / rel))
+    # 仓库内自带的虚拟环境：可移植，而且通常就是装了 torch 的那个
+    root = _repo_root()
+    for rel in (".venv/Scripts/python.exe", ".venv/bin/python",
+                "venv/Scripts/python.exe", "venv/bin/python"):
+        out.append(str(root / rel))
+    if os.name == "nt":
+        out.append("py")                               # Windows 启动器
     out.append("python3")
     out.append("python")
     seen, res = set(), []

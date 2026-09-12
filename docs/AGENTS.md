@@ -204,3 +204,136 @@ itself — `regression` was not pinning the interpreter tier, so switching inter
 turned "Lite engines registered under torch" into a **false `FAIL: capability lost`**.
 A verifier that cries wolf is worse than no verifier, which is why tier mismatches now
 degrade to an explicit `WARN (tiers differ, not comparable)`.
+
+---
+
+## 八、产品智能体（v0.3.0 起新增 —— `pasm_agents`）
+
+> 本章是 **产品层**，不是验证层。它们是用户拿来就用的智能体，
+> 而不是给核心做体检的智能体。
+
+### 1. 为什么需要这层
+
+v0.2.x 的 `pasm_skills/agents/` 里全是**验证智能体** —— 跑得动但跑出来是断言报告，
+不能塞进游戏、不能拿来陪老人、不能辅导学生。它们是"看 PASM 健不健康"的工具。
+
+**产品智能体** 是另一个维度：你 `pip install` 完就能 `from pasm_agents import NpcAgent`，
+实例化、写记忆、对话、save —— 是一个**真智能体**。
+
+### 2. 三个开箱即用的产品
+
+| Agent | 做什么 | 关键 API |
+|---|---|---|
+| `NpcAgent`         | 游戏 NPC：性格 + 记忆 + 情绪 + 成长动作 | `observe()` / `act()` / `chat()` / `feedback()` / `save()` |
+| `ElderlyCompanion` | 老人陪伴：关键事实 + 用药 + 危机升级 | 同上 + `detect_crisis()` / `escalate()` / `due_medication()` |
+| `LearningTutor`    | 学习陪伴：薄弱点定位 + 巩固计划 | 同上 + `report(topic, score)` / `pick_next()` |
+
+三者共享 `BaseAgent`（`pasm_agents/base.py`），
+差异只在 persona / 动作池 / 聊天模板。
+
+### 3. 落盘位置
+
+```
+~/.pasm-agents/<agent_id>/
+├── agent_state.json       # persona + 交互数 + 反馈历史 + mood + 备注
+├── episodes.json          # light 档位下的记忆
+└── action_weights.json    # light 档位下的动作权重
+```
+
+### 4. 档位透明（永不隐藏降级）
+
+| tier | 含义 | 何时启用 |
+|---|---|---|
+| `bionic` | 完整 PASM + emotion 模块 | `pip install pasm-skills[torch]` |
+| `core`    | PASM 核心（memory + learning） | `PASM_PYTHON` 指向带核心的 Python |
+| `light`   | 纯内置（重要度淘汰 + 字面检索） | 任何机器 |
+
+每个 agent 的 `summary()` 与落盘 JSON 都有 `tier` 字段。
+
+### 5. 与验证层的关系（双向）
+
+```
+                ┌─────────────────────────────┐
+                │  验证层 p    a    s    m    _    s    k    i    l    l    s     │
+                │  core-verifier / parity / regression /                    │
+                │  npc-lifelong / companion-elderly /                      │
+                │  study-tutor  / soak-longrun                             │
+                └──────────────────────┬──────────────────────────────────┘
+                                       │ 反向压出真问题
+                                       │ （同分排序 / 容量淘汰 / 反馈指定动作…）
+                                       ▼
+                ┌─────────────────────────────┐
+                │  产品层    p    a    s    m    _    a    g    e    n    t    s  │
+                │  NpcAgent / ElderlyCompanion / LearningTutor  │
+                │  （已采纳验证层压出的修复）                            │
+                └─────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+                            用户：pip install pasm-skills
+                                 from pasm_agents import NpcAgent
+```
+
+**关键点**：验证层压出的核心修复，在 v0.3.0 已被产品层直接采纳 —— 用户装上 `pasm-agents`
+就在用修过的版本，不需要等下一个核心版本。
+
+### 6. 自定义你的 Agent
+
+```python
+from pasm_agents import BaseAgent
+
+class MyAgent(BaseAgent):
+    def _render_reply(self, text, facts, mood):
+        return f"你说：{text}。我刚才想到：{[f.get('title') for f in facts[:3]]}"
+    def action_pool(self):
+        return ["say_hi", "think", "rest"]
+
+a = MyAgent(agent_id="mine", persona={"name": "我的"})
+a.observe("今天第一次见面")
+print(a.act())           # 'say_hi' / 'think' / 'rest'
+print(a.chat("你好"))    # '你说：你好。我刚才想到：["今天第一次见面"]'
+a.save()
+```
+
+### 7. 跑起来
+
+```bash
+# 三个 demo 立刻看到效果
+pasm-agents demo npc
+pasm-agents demo companion
+pasm-agents demo tutor
+
+# 交互模式
+pasm-agents run npc --id=my_npc --persona-file=personas/herbalist.json
+```
+
+### 8. 三个 demo 的实测输出（v0.3.0, tier=light）
+
+**NpcAgent demo_herbalist**：
+
+```
+[init] <NpcAgent id='demo_herbalist' tier=light interactions=1>
+[observe] written 5-star episode; memory={'episodes': 2}
+[act] talk
+[chat 问名字] 陈伯道：河边摆摊的草药老头，慢悠悠、爱讲道理。
+[chat 买药] 陈伯眯起眼：上次，老朽还记着呢。
+[feedback praise/talk] weights={}
+[save] -> C:\Users\xiaozhi\.pasm-agents\demo_herbalist
+```
+
+**ElderlyCompanion demo_chenxiulan**：
+
+```
+[chat 我吃什么药] 陈秀兰想了想：「每天早 8 点吃降压药络活喜 5mg」。记得清楚。
+[chat 我叫什么名字] 陈秀兰想了想：「78 岁，独居，腿脚不便」。记得清楚。
+[detect crisis 摔倒] ['摔倒/外伤']
+[escalate] -> {"agent_id": "demo_chenxiulan", "persona_name": "陈秀兰", "reason": "卫生间滑倒", "suggested_action": "立即联系紧急联系人或拨打 120", "emergency_contact": {"name": "女儿小敏", "phone": "13900000000"}, ...}
+```
+
+**LearningTutor demo_xiaoya**：
+
+```
+[state] {'分数加减': 0.264, '面积计算': 0.27, '行程问题': 0.0, '鸡兔同笼': 0.0, '质因数分解': 0.0, '图形对称': 0.0}
+[pick_next] 图形对称            # 最弱优先 + 20% 抖动
+[chat 难]   别急，小雅～咱们一点点来。要不今天先做 3 道「质因数分解」？
+[chat 哪里差] 从最近记录看，**行程问题** 还需要多练（0%）。
+```

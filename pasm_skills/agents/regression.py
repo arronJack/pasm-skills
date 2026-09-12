@@ -16,7 +16,8 @@
 用不带 torch 的解释器跑出 `[]` —— 这不是退化，是**换了把尺子**。
 
 早期版本没记录这一点，结果把"换了解释器"误报成 `[FAIL] 能力消失`。
-现在基线与采集结果都会记下 `python` 路径与 `torch` 可用性；
+现在基线与采集结果都会记下 `python` **版本号**与 `torch` 可用性
+（只记版本，不记路径 —— 基线是入库文件，不该带个人机器路径）；
 两者不一致时，清单类比对自动降级为 `[WARN] 档位不同·不可比`，
 而不是撒谎说"能力没了"。
 """
@@ -38,7 +39,9 @@ try:
     _torch = True
 except Exception:
     _torch = False
-out["python"] = _sys.executable
+# 只记"可比的档位描述"，**不记本机绝对路径** —— 基线是入库的公开文件，
+# 把维护者的机器路径写进去既泄露信息，对别人也毫无参考价值。
+out["python"] = ".".join(str(x) for x in _sys.version_info[:3])
 out["torch"] = _torch
 """
 
@@ -210,10 +213,12 @@ class RegressionAgent(Agent):
     def _report_tier(self, old: dict, new: dict) -> None:
         o, n = old.get("python"), new.get("python")
         if o and n and o != n:
-            self.warn("采集解释器与基线不同",
-                      "%s → %s（清单类结论仅供参考，可用 PASM_PYTHON 固定解释器）" % (o, n))
+            self.warn("采集解释器档位与基线不同",
+                      "Python %s → %s（torch=%s；清单类结论仅供参考，"
+                      "可用 PASM_PYTHON 固定解释器）" % (o, n, new.get("torch")))
         elif n:
-            self.ok("采集解释器与基线一致", "%s（torch=%s）" % (n, new.get("torch")))
+            self.ok("采集解释器档位与基线一致",
+                    "Python %s（torch=%s）" % (n, new.get("torch")))
 
     # ------------------------------------------------------------ 比对器
     def _diff_hashes(self, label: str, old: dict, new: dict) -> None:

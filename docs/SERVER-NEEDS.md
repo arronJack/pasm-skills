@@ -15,7 +15,7 @@
 | 1 | 建 PASM Skills 公开仓 | **否** | 代码托管由 GitHub / Gitee 提供，用户不需要自己的机器 | GitHub `arronJack/pasm-skills` + Gitee `arronzheng/pasm-skills` 双端 |
 | 2 | 本地 `pasm-skills` 文件夹 | **否** | 纯本地目录 | `E:/AI/pasm-skills` |
 | 3 | 智能体做长期验证（手动跑） | **否** | 智能体是零依赖 CLI，本机跑即可 | `python -m pasm_skills run --all` |
-| 4 | 智能体做长期验证（**定时**跑） | **否** | 见下方"三条零服务器路径" | ① Windows 任务计划 ② WorkBuddy 自动化 ③ GitHub Actions（公开仓免费） |
+| 4 | 智能体做长期验证（**定时**跑） | **否** | 见下方"三条零服务器路径" | ① Windows 任务计划 ② 本机助手定时任务 ③ GitHub Actions（公开仓免费） |
 | 5 | 保留历史验证结果 | **否** | JSON 报告 + git 历史足够 | 报告入库 `baselines/`，git 即审计日志 |
 | 6 | Step 1：Studio 走 engine_api | **否** | 纯本地代码重构 | —— |
 | 7 | Step 2：LiteEngine freeze_vae + env 插件化 | **否** | 纯本地代码 | —— |
@@ -44,7 +44,7 @@ python -m pasm_skills run --all --out reports/$(date +%F).json
 ### 路径 B：本地定时（推荐现在就用）
 
 - **Windows 任务计划**：每天固定时间跑一次 `run --all --out reports\YYYY-MM-DD.json`；
-- **WorkBuddy 自动化**：在会话里直接说"每天早上 9 点对 PASM 跑一次全量验证并归档"，
+- **本机助手定时任务**：在会话里直接说"每天早上 9 点对 PASM 跑一次全量验证并归档"，
   即可建立一条定时任务（由本机执行，不需要服务器）。
 
 优点：自动化、有归档、不需要任何外部服务。

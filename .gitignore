@@ -11,6 +11,9 @@ dist/
 reports/
 *.local.json
 
+# 本机私有配置：指定本机带 torch 的解释器等（含个人路径，绝不入库）
+pasm-skills.local.json
+
 # 编辑器 / 系统
 .idea/
 .vscode/
