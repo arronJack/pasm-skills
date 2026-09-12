@@ -45,8 +45,11 @@ out["torch"] = _torch
 CORE_FP_CODE = r"""
 import json, hashlib, os
 def h(p):
+    # 行尾归一化后再哈希：本机 core.autocrlf 不稳定，同一份文件在镜像仓 `reset --hard`
+    # 之后会变成 CRLF。直接哈希原始字节，就会把"换个行尾"报成"文件有变更"——
+    # 又是一个假红。口径与 parity-guard 对齐：忽略 CRLF/LF 差异。
     try:
-        return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
+        return hashlib.sha256(open(p, "rb").read().replace(b"\r\n", b"\n")).hexdigest()[:16]
     except Exception:
         return None
 out = {"cognitive": {}, "envs": {}, "engine_api": None, "api": None,
@@ -73,8 +76,11 @@ print(SENTINEL + json.dumps(out, ensure_ascii=False))
 LITE_FP_CODE = r"""
 import json, hashlib, os
 def h(p):
+    # 行尾归一化后再哈希：本机 core.autocrlf 不稳定，同一份文件在镜像仓 `reset --hard`
+    # 之后会变成 CRLF。直接哈希原始字节，就会把"换个行尾"报成"文件有变更"——
+    # 又是一个假红。口径与 parity-guard 对齐：忽略 CRLF/LF 差异。
     try:
-        return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
+        return hashlib.sha256(open(p, "rb").read().replace(b"\r\n", b"\n")).hexdigest()[:16]
     except Exception:
         return None
 out = {"files": {}, "engines": [], "engines_error": None, "errors": []}

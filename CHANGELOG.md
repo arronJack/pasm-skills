@@ -15,6 +15,11 @@
   "结构检查"和"行为检查"用的不是同一把尺子。现在统一走
   `scenarios.choose_python(prefer_torch=True)`（`PASM_PYTHON` 仍最高优先）。
 - `pasm-skills run --out` 在父目录不存在时直接抛 `FileNotFoundError`，现在会自动建目录。
+- **指纹哈希未归一化行尾**：本机 `core.autocrlf` 不稳定，同一份文件在镜像仓
+  `git reset --hard` 之后会变成 CRLF，原始字节哈希就把"换个行尾"报成
+  `[WARN] 核心认知层 文件有变更` —— 与上面那条同一类**假红**。
+  现在哈希前先把 `\r\n` 归一为 `\n`，口径与 `parity-guard` 对齐（它本来就忽略 CRLF）。
+  这类噪音不致命，但会让"文件有变更"这条结论变得不可信 —— 狼来了喊多了就没人听。
 
 ### 文档
 - `README.md` 增补"结构验证不够"一节与失效类型对照表、领域智能体章节、真问题表。

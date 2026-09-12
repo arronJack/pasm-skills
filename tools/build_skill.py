@@ -22,6 +22,7 @@ import argparse
 import re
 import shutil
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -171,13 +172,38 @@ def build(do_zip: bool) -> int:
     return 0
 
 
+def _clean_dist() -> None:
+    """把上次的产物**挪到 `_stale/`**，而不是删掉。
+
+    两个原因：
+    1. 有些环境（含本机）对删除动作有安全守卫，`rmtree` 会被拦下，脚本直接中断；
+    2. 产物本来就不该被静默销毁 —— 上一版包留着可对比，也方便回溯。
+    """
+    if not DIST.exists():
+        return
+    stale = DIST / "_stale"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    for sub in ("workbuddy", "clawhub"):
+        src = DIST / sub
+        if not src.exists():
+            continue
+        stale.mkdir(parents=True, exist_ok=True)
+        dst = stale / ("%s-%s" % (sub, stamp))
+        try:
+            shutil.move(str(src), str(dst))
+            print("[INFO] 旧产物已挪到 %s" % dst)
+        except Exception as ex:                       # noqa: BLE001
+            print("[WARN] 挪动失败（继续构建）：%s" % ex, file=sys.stderr)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="打包双平台技能包")
     ap.add_argument("--zip", action="store_true", help="顺带打 WorkBuddy 上传用的 ZIP")
-    ap.add_argument("--clean", action="store_true", help="先清空 dist（默认增量覆盖）")
+    ap.add_argument("--clean", action="store_true",
+                    help="先把旧产物挪到 _stale/（不删除）")
     args = ap.parse_args(argv)
-    if args.clean and DIST.exists():
-        shutil.rmtree(DIST, ignore_errors=True)
+    if args.clean:
+        _clean_dist()
     return build(args.zip)
 
 

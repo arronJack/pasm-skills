@@ -1,20 +1,20 @@
 {
-  "collected_at": "2026-09-12 14:43:36",
+  "collected_at": "2026-09-12 14:53:48",
   "core": {
     "cognitive": {
       "__init__.py": "389fc42e27f63879",
-      "agent_team.py": "517e63b217faee63",
+      "agent_team.py": "366849bd5856c2ba",
       "coder.py": "de0546cc70c67b3c",
       "cog.py": "d0f0e4366c5db3aa",
-      "learning.py": "4e0e7e7163d30138",
+      "learning.py": "026986036ad0359a",
       "mathlab.py": "ac034da5ffe65f0b",
       "memory_layers.py": "b61d1cc8bd6afeeb",
       "memrouter.py": "135269e62ffb101e",
       "memvec.py": "09a90ab13b1fc164",
       "percept.py": "898e7f488fd05be5",
       "quantum.py": "5b1a1002952e433f",
-      "selfheal.py": "87de5d516b30db77",
-      "symbolic.py": "5b103422ad1a170e",
+      "selfheal.py": "dae9d7cb489405a4",
+      "symbolic.py": "78654ad348fa377a",
       "workctx.py": "c8d0309fa78027f4"
     },
     "envs": {
@@ -34,7 +34,7 @@
   },
   "lite": {
     "files": {
-      "pasm_lite.py": "8a2ac37bae9b2b8a",
+      "pasm_lite.py": "9c2d7c9e1bcf9289",
       "learning.py": "f79c707c84690f0b",
       "engine.py": "ade5c71b7bae3ceb",
       "engine_api.py": "915197f511dd1ecc",
