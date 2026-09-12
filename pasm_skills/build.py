@@ -66,6 +66,42 @@ LAYOUT_SLUGDIR = "slug-dir"
 #: 技能包大小上限（部分平台硬限制 3MB）
 ZIP_MAX_BYTES = 3 * 1024 * 1024
 
+#: 正文里**不许出现**的维护者内部注释。
+#: 每条都对应一次真事故：早期四份正文开头都写着"本文件是 SKILL.md 的正文部分…"，
+#: 那段**原样出现在平台上用户点开的技能页里**（ClawHub 实测，33 次下载都带着它）。
+#: 维护者说明应该放各仓的 `skill/README.md`。不要随手放宽这个表。
+BODY_FORBIDDEN = (
+    ("SKILL.md 的正文部分", "给维护者看的构建注释"),
+    ("build_skill.py 会把它", "给维护者看的构建注释"),
+    ("产出可直接上传的包", "给维护者看的构建注释"),
+)
+
+#: 正文里不许出现的**个人环境路径**（公开产物分发给陌生人，不该带这些）
+BODY_PATH_PATTERNS = (
+    (re.compile(r"[A-Za-z]:[\\/]Users[\\/]", re.I), "Windows 个人目录绝对路径"),
+    (re.compile(r"/home/[A-Za-z0-9_.-]+/"), "Linux 个人目录绝对路径"),
+)
+
+
+def lint_body(body: str, where: str) -> List[str]:
+    """检查正文里有没有"不该发给陌生人"的内容。返回问题清单（空 = 干净）。
+
+    为什么放在打包库、而不是各仓自己写检查脚本：**这里才是产物的唯一出口**。
+    规则做进出口，所有用基座打包的仓（pasm-agents，或别人自己的仓）自动受保护，
+    不必每个仓各抄一份。
+    """
+    problems: List[str] = []
+    for marker, why in BODY_FORBIDDEN:
+        if marker in body:
+            problems.append("%s：正文含「%s」（%s）—— 它会原样出现在用户看到的技能页上"
+                            % (where, marker, why))
+    for pat, why in BODY_PATH_PATTERNS:
+        m = pat.search(body)
+        if m:
+            problems.append("%s：正文含%s（%s…）—— 公开产物不该带个人环境信息"
+                            % (where, why, m.group(0)))
+    return problems
+
 
 @dataclass
 class ProjectMeta:
@@ -208,6 +244,14 @@ def build_one(spec: SkillSpec, version: str, meta: ProjectMeta, root: Path,
         print("[FAIL] %s 不存在" % body_path, file=sys.stderr)
         return 1
     body = body_path.read_text(encoding="utf-8").replace("{{VERSION}}", version)
+
+    lint = lint_body(body, spec.body_file)
+    if lint:
+        for msg in lint:
+            print("[FAIL] %s" % msg, file=sys.stderr)
+        print("       打包中止 —— 这类内容发出去会直接暴露给用户，不是提醒是拦截。",
+              file=sys.stderr)
+        return 1
 
     targets = {
         LAYOUT_ZIPROOT: (dist / LAYOUT_ZIPROOT / spec.name / "SKILL.md",

@@ -72,6 +72,34 @@ def cmd_repos(args) -> int:
     return 0
 
 
+def _missing(name: str) -> int:
+    """智能体找不到时的自救指引。
+
+    这里刻意写得啰嗦。两种最常见的翻车 —— "只装了基座"、
+    "照着 2026-09 拆仓前的旧文档去 clone 了基座仓" —— 症状都是"未知智能体"，
+    用户却完全看不出发生了什么。一句话指路能省掉一轮求助。
+    """
+    import difflib
+
+    found = names()
+    print("[FAIL] 未知智能体 %s" % name, file=sys.stderr)
+    print(file=sys.stderr)
+    if not found:
+        print("当前发现的智能体数量：0 —— 你只装了基座。", file=sys.stderr)
+        print("基座刻意不内置任何智能体，这是正常现象，不是你装错了。", file=sys.stderr)
+        print("装上智能体包即可：", file=sys.stderr)
+        print("    pip install pasm-agents        # 官方智能体集（NPC / 陪伴 / 教学 / 验证）", file=sys.stderr)
+        print("    PASM_SKILLS_PATH=/path/to/dir  # 或指向本地智能体目录", file=sys.stderr)
+    else:
+        print("当前可用（%d 个）：%s" % (len(found), ", ".join(found)), file=sys.stderr)
+        near = difflib.get_close_matches(name, found, n=3, cutoff=0.5)
+        if near:
+            print("是不是想跑：%s ？" % "  ".join(near), file=sys.stderr)
+    print(file=sys.stderr)
+    print("排障：python -m pasm_skills agents     # 看智能体是从哪儿加载进来的", file=sys.stderr)
+    return 2
+
+
 def cmd_run(args) -> int:
     ctx = _ctx()
     targets: List[str] = names() if args.all else list(args.agents or [])
@@ -83,8 +111,7 @@ def cmd_run(args) -> int:
     results = []
     for name in targets:
         if name not in AGENTS:
-            print("[FAIL] 未知智能体 %s" % name, file=sys.stderr)
-            return 2
+            return _missing(name)
         res = run_agent(name, ctx, options)
         results.append(res)
         if not args.json:

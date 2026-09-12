@@ -1,6 +1,3 @@
-> 本文件是 **pasm-agent-authoring 技能 SKILL.md 的正文部分**（不含 frontmatter）。
-> `tools/build_skill.py`（内部用 `pasm_skills.build`）会把它拼上两种归档形态的 frontmatter（`zip-root` / `slug-dir`），产出可直接上传的包。
-
 # PASM 智能体开发基座（pasm-agent-authoring）
 
 **从零写一个智能体，并打成能发布的技能包。**
