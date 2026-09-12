@@ -14,7 +14,7 @@ pasm-skills-dist/
 | 平台 | 期望结构 | 放错了会怎样 |
 |---|---|---|
 | WorkBuddy | ZIP **根目录**直接是 `SKILL.md` | 报「压缩包缺少 SKILL.md 文件」——它不递归找 |
-| ClawHub | `<slug>/SKILL.md`（一层目录） | 识别不到技能名 |
+| ClawHub | `<slug>/SKILL.md`（一层目录，网页上直接**选文件夹**） | 识别不到技能名 |
 
 生成/更新（版本号自动取自 `pyproject.toml`，两边永不漂移）：
 
@@ -35,7 +35,7 @@ python tools/build_skill.py --zip --clean   # 先把旧产物挪到 _stale/ 再�
 | **Gitee** | gitee.com/arronzheng/pasm-skills | ✅ 已发布 | 全部（git push） | 无 |
 | **本机 WorkBuddy** | `~/.workbuddy/skills/` | ✅ 已安装 | 全部（拷 SKILL.md） | 无 |
 | **WorkBuddy 开放平台** | <https://open.workbuddy.cn/> | ✅ **已提交审核** | 除登录外的全部（浏览器自动化） | 仅微信扫码登录 |
-| **ClawHub** | <https://clawhub.ai/import> | ⏸ 待决策 | 有 CLI | **登录 + 是否接受 MIT-0** |
+| **ClawHub** | <https://clawhub.ai/skills/publish> | ✅ **已发布**（Hidden · Needs review） | 除登录外的全部 | 仅 GitHub 授权登录 |
 
 ---
 
@@ -96,12 +96,37 @@ python -c "import zipfile;z=zipfile.ZipFile('E:/AI/pasm-skills-dist/pasm-longter
 
 ⚠️ **ClawHub 强制 MIT-0 许可证**。本仓源码是 MIT，发布到 ClawHub 的那份包
 按平台要求标注 `license: MIT-0`（比 MIT 更宽松，允许无署名使用）。
-若不想以 MIT-0 发布，就不要走 ClawHub，只走 WorkBuddy + GitHub + Gitee。
-
-`clawhub/pasm-longterm-verify/SKILL.md` 里的 `license` 已经写成 `MIT-0`，
+`clawhub/<slug>/SKILL.md` 里的 `license` 已经写成 `MIT-0`，
 是**故意与源码仓不一致**的 —— 发布前请确认接受这一点。
 
-### 方式 1：CLI（推荐，可版本化）
+### 实测记录（2026-09-12）
+
+| 项 | 值 |
+|---|---|
+| 发布账号 | `@arronjack`（Sign in with GitHub） |
+| Slug | `pasm-longterm-verify` |
+| Display name | `PASM Long-term Verification` |
+| Summary | 由 SKILL.md 的 `description` 自动带入（300/300 字符上限） |
+| Version | `0.2.1` —— ⚠️ **平台默认填 `1.0.0`，必须手动改** |
+| Categories | Research / Development / Agents（3/3） |
+| Keywords | `#pasm #verification #memory #testing #ai-agents`（5/5） |
+| License | MIT-0（强制，须勾选权利声明才能发布） |
+| 状态 | **Hidden · Needs review**；面板提示「SkillSpector findings are pending for this release」 |
+
+> ClawHub 发完不是立刻公开：它先跑 **SkillSpector** 自动扫描，扫描结果出来后才进审核/上架。
+> 在此之前技能处于 `Hidden from public catalog`。
+
+### 流程（网页方式）
+
+1. 打开 <https://clawhub.ai/skills/publish> → **Sign in with GitHub**；
+2. 拖拽或点 **Choose folder**，选目录 `pasm-skills-dist/clawhub/pasm-longterm-verify/`
+   （控件是 `input[webkitdirectory]`，要的是**文件夹**不是压缩包）；
+3. 平台自动解析并预填 SLUG / SUMMARY / RELEASE TAGS；**VERSION 默认 `1.0.0` 要手改成 `0.2.1`**；
+4. 补 DISPLAY NAME、**CATEGORIES**（最多 3 个）、**SEARCH KEYWORDS**（最多 5 个）；
+5. 勾选 **I have the rights to publish this skill under MIT-0.**（required）；
+6. 点 **Publish skill** → 跳 Dashboard，技能卡片显示 `Hidden` / `Needs review`。
+
+### 方式 1：CLI（可版本化，适合以后自动化）
 
 ```bash
 npx clawhub@latest publish E:/AI/pasm-skills-dist/clawhub/pasm-longterm-verify \
@@ -112,21 +137,14 @@ npx clawhub@latest publish E:/AI/pasm-skills-dist/clawhub/pasm-longterm-verify \
   --tags latest
 ```
 
-- `slug` 必须小写 + 短横线；
-- `version` 必须是合法 semver；
+- `slug` 必须小写 + 短横线；`version` 必须是合法 semver；
 - 首次使用需要先 `npx clawhub@latest login`（浏览器授权）。
 
-### 方式 2：网页上传文件夹
-
-1. 打开 <https://clawhub.ai/import>；
-2. 上传目录 `pasm-skills-dist/clawhub/pasm-longterm-verify/`；
-3. 只接受文本文件；**不要**包含 `.git` / `LICENSE` / 图片 / `.DS_Store`（当前包只有 `SKILL.md`，已合规）；
-4. 确认 slug / 版本 / 描述后提交。
-
-### 方式 3：从 GitHub 导入
+### 方式 2：从 GitHub 导入
 
 ClawHub 支持按 GitHub 仓库导入，但要求：仓库**公开**、**非 fork**、且**属于当前登录账号**。
-`github.com/arronJack/pasm-skills` 三条都满足。
+`github.com/arronJack/pasm-skills` 三条都满足 —— 但注意导入按**仓库根**找 SKILL.md，
+本仓根目录没有（正文在 `skill/SKILL.body.md`），所以**这种方式不适用**，用上面的文件夹上传。
 
 ### frontmatter 已满足的 ClawHub 要求
 
@@ -134,7 +152,7 @@ ClawHub 支持按 GitHub 仓库导入，但要求：仓库**公开**、**非 for
 |---|---|
 | `name` 匹配 `^[a-z0-9][a-z0-9-]*$` | ✅ `pasm-longterm-verify` |
 | `description` | ✅ |
-| `version` semver | ✅ `0.2.1` |
+| `version` semver | ✅ `0.2.1`（但网页表单不自动读，要手填） |
 | `metadata.openclaw.requires.env` / `.bins` | ✅ `[]` / `[python3, git]` |
 | `license` | ✅ `MIT-0` |
 
@@ -162,9 +180,10 @@ cp pasm-skills-dist/workbuddy/SKILL.md \
 ```bash
 # 1) 改 pyproject.toml 的 version（单一来源）
 # 2) 重新生成两个包 + ZIP
-python tools/build_skill.py --zip
-# 3) WorkBuddy：后台上传新 ZIP（同技能名 → 新版本）
-# 4) ClawHub：重跑 publish，version 用新号
+python tools/build_skill.py --zip --clean
+# 3) WorkBuddy：后台上传新 ZIP（同技能名 → 新版本号）
+# 4) ClawHub：重跑 publish，--version 用新号（网页方式记得手改 VERSION 框）
+# 5) 本机技能：重新 cp 一份
 ```
 
 ---
@@ -178,6 +197,7 @@ python tools/build_skill.py --zip
 | **元素 ref 会失效** | 用快照里的 `@e12` 点击，点到了别的链接（跳去 ClawHub） | 每次操作前重新快照；或直接用 `eval` 按文本查元素再点 |
 | **自定义下拉不响应 `eval` 的 `.click()`** | 派发 `click` 事件后下拉纹丝不动（组件监听的是 pointer 事件） | 改用真实鼠标：`mouse move <x> <y>` → `mouse down` → `mouse up`；坐标用 `getBoundingClientRect()` 取，**不要**照截图估 |
 | **截图坐标 ≠ 视口坐标** | 截图 1080 宽、视口 1867 宽，按截图估的坐标全偏 | 一律 `eval` 取 `getBoundingClientRect()`，或先读 `innerWidth` 算缩放 |
+| **ClawHub 的 VERSION 不自读** | 表单默认 `1.0.0`，与包内 `0.2.1` 不一致 | 发布前手动改；否则两边版本号会对不上 |
 | **中文乱码** | PowerShell 输出 `寮€鍙戝钩鍙?` | 命令前加 `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` |
 | **`ind()` 折行** | YAML `>-` 折叠时中文句子中间多出空格 | 中文描述整体输出一行不折行，别改回去 |
 
