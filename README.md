@@ -223,8 +223,10 @@ pasm-skills/
 │     ├─ companion_elderly.py  ├ 领域层（行为）
 │     ├─ study_tutor.py        │
 │     └─ soak_longrun.py       ┘
+├─ skill/            SKILL.md 正文（`tools/build_skill.py` 拼两套 frontmatter 产出可发布包）
+├─ tools/            打包脚本
 ├─ baselines/        事实基线（regression 用，建议入库）
-└─ docs/             设计文档、智能体选型分析、服务器需求评估
+└─ docs/             设计文档、智能体选型分析、服务器需求评估、[发布指南](docs/PUBLISH.md)
 ```
 
 ## 十、设计原则
