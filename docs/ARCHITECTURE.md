@@ -70,7 +70,7 @@ PASM/pasm/cognitive/learning.py          ← 核心学习层（同名不同物�
 `choose_python(ctx, prefer_torch=True)` 按候选顺序找一个能用的解释器：
 
 ```
-PASM_TORCH_PYTHON → PASM_PYTHON → 本机配置(pasm-skills.local.json)
+PASM_TORCH_PYTHON → PASM_PYTHON → 本机配置(~/.pasm-skills/local.json)
   → sys.executable → 仓库内 venv(.venv / venv) → py → python3 → python
 ```
 
@@ -78,8 +78,9 @@ PASM_TORCH_PYTHON → PASM_PYTHON → 本机配置(pasm-skills.local.json)
 装了 torch 走仿生档（真实脉冲 + 人格模块），没装降级到 `pasm.light.PASMAgent`。
 这个档位会一路传到 `judge(tier=...)`，**写进每一条结论里**。
 
-> 本机那个"带 torch 的解释器"往往在仓库外，所以它走**已被 gitignore 的本机配置文件**
-> （`pasm-skills.local.json`）而不是硬编码 —— 公开仓里不留任何个人机器路径。
+> 本机那个"带 torch 的解释器"往往在仓库外，所以它走**仓库外的本机配置文件**
+> （`~/.pasm-skills/local.json`，可用 `PASM_LOCAL_CONF` 改路径）而不是硬编码 ——
+> 公开仓里不留任何个人机器路径。
 
 ### 3.2 场景代码怎么送进去
 

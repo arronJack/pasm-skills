@@ -31,15 +31,27 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-#: 本机私有配置（已进 .gitignore）。**公开仓里不留任何个人解释器路径**，
-#: 需要固定某个带 torch 的解释器时，在仓库根写 `pasm-skills.local.json`：
-#:     {"python": ["/path/to/python", "C:/another/python.exe"]}
-#: 它只影响本机，不会随仓库分发出去。
-LOCAL_CONF = "pasm-skills.local.json"
+#: 本机私有配置的查找顺序（**都不在仓库里**，或已被 gitignore）。
+#: 需要固定某个带 torch 的解释器时，在下面任一位置写：
+#:     {"python": ["/path/to/python", "%%HOME%%/venv/bin/python"]}
+#: 支持 ``%%HOME%%`` 占位，配置文件里就不用写死用户名。
+LOCAL_CONF_HOME = (".pasm-skills", "local.json")
+LOCAL_CONF_REPO = "pasm-skills.local.json"
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def _conf_paths() -> List[Path]:
+    """本机配置的候选路径：环境变量 → 用户主目录（推荐）→ 仓库根（兼容）。"""
+    out: List[Path] = []
+    env = os.environ.get("PASM_LOCAL_CONF")
+    if env:
+        out.append(Path(env).expanduser())
+    out.append(Path.home().joinpath(*LOCAL_CONF_HOME))
+    out.append(_repo_root() / LOCAL_CONF_REPO)
+    return out
 
 # ---------------------------------------------------------------- prelude
 #: 注入到子进程的公共工具。随每个场景一起下发，保持"自包含"。
@@ -191,16 +203,17 @@ def has_torch(python: str, timeout: int = 90) -> bool:
 
 
 def local_pythons() -> List[str]:
-    """读仓库根的 `pasm-skills.local.json` 里的本机解释器。
+    """读本机私有配置里的解释器（仓库外，或已 gitignore）。
 
-    存在的理由：能驱动仿生档的那个解释器往往在仓库外（某个 venv / 托管运行时）。
+    存在的理由：能驱动仿生/核心档的那个解释器往往在仓库外（某个 venv / 托管运行时）。
     把它写进代码会泄露个人路径、对别人也无效；写进环境变量又跨不了终端。
-    放一个**已被 gitignore 的**本机配置文件，两边都顾上。
+    放一个**不在仓库里**的配置文件，两边都顾上。
     """
     out: List[str] = []
-    try:
-        conf = _repo_root() / LOCAL_CONF
-        if conf.is_file():
+    for conf in _conf_paths():
+        try:
+            if not conf.is_file():
+                continue
             data = json.loads(conf.read_text(encoding="utf-8"))
             v = data.get("python")
             if isinstance(v, str):
@@ -209,8 +222,8 @@ def local_pythons() -> List[str]:
                 if item:
                     # 支持 %%HOME%% 占位，配置文件里就不用写死用户名
                     out.append(str(item).replace("%%HOME%%", str(Path.home())))
-    except Exception:                                  # noqa: BLE001
-        pass                                           # 配置坏了不该让验证跑不起来
+        except Exception:                              # noqa: BLE001
+            continue                                   # 配置坏了不该让验证跑不起来
     return out
 
 

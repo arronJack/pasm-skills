@@ -110,6 +110,34 @@ class LearningTutor(BaseAgent):
             return min(ks, key=ks.get)
         return random.choice(list(ks))
 
+    def mastery(self, topic: str) -> float:
+        """单个知识点当前掌握度（0~1）。未知知识点返回 0.0。"""
+        ks = self.state.notes.get("knowledge_state") or {}
+        return round(float(ks.get(topic, 0.0)), 3)
+
+    def snapshot(self) -> Dict[str, Any]:
+        """导出**可机读的学情快照**，供上层画像 / 报表 / 家长端直接消费。
+
+        之前掌握度只躺在 ``state.notes["knowledge_state"]`` 里 —— 那是内部状态，
+        外部要读就得伸手进 ``notes``，等于把私有结构当接口用。
+        画像层要接的是**契约**而不是内部字典，所以这里给一个稳定的出口。
+
+        返回：``mastery``（各知识点掌握度）/ ``weakest``（最该练的）/
+        ``average`` / ``history_size``（累计作答次数）/ ``tier``。
+        """
+        ks = self.state.notes.get("knowledge_state") or {}
+        hist = self.state.notes.get("history") or []
+        vals = [float(v) for v in ks.values()]
+        return {
+            "student": self.persona.get("name"),
+            "grade": self.persona.get("grade"),
+            "mastery": {k: round(float(v), 3) for k, v in ks.items()},
+            "weakest": (min(ks, key=ks.get) if ks else None),
+            "average": (round(sum(vals) / len(vals), 3) if vals else 0.0),
+            "history_size": len(hist),
+            "tier": self.tier,
+        }
+
     # ------- 聊天渲染 --------------------------------------------
 
     def _render_reply(

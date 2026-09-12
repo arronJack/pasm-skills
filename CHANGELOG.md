@@ -25,21 +25,68 @@
 - **`pasm_agents/cli.py`** —— `pasm-agents` 命令行：`demo` / `run` / `list` / `inspect`
 - `examples/` 三个 30 秒示例：`npc_quickstart.py` / `companion_quickstart.py` / `tutor_quickstart.py`
 
-### 新增 —— 发布物（两种归档形态）
+### 新增 —— 发布物（三个智能体各自独立成包）
 
-- `tools/build_skill.py` 重构：**一个正文 → 两种形态**，形态按**归档结构**命名，不按平台名
+- **产品层拆成三个独立技能包**，各自一份正文、各自一个 ZIP —— 按需只装一个：
+  - `pasm-npc`（`skill/SKILL.npc.body.md`）
+  - `pasm-companion`（`skill/SKILL.companion.body.md`）
+  - `pasm-tutor`（`skill/SKILL.tutor.body.md`）
+  - 原先的合集正文 `SKILL.agents.body.md` 随之移除（内容已拆进上面三份）
+- `tools/build_skill.py` 重构：**一个正文 → 两种归档形态**，形态按**归档结构**命名，不按平台名
   - `zip-root`：`SKILL.md` 直接躺在 ZIP 根目录（实测：包成 `skills/<name>/SKILL.md` 会被拒收）
   - `slug-dir`：以 slug 命名的目录，目录里放 `SKILL.md`
   - 支持多技能（`--name` 只构建一个）、`--zip` 顺带打 ZIP 并内置结构校验
-- `skill/SKILL.agents.body.md`：产品层技能正文（新增）
-- 技能清单新增 `pasm-agents`（v0.3.0）
+- 技能清单共 4 项：`pasm-npc` / `pasm-companion` / `pasm-tutor` / `pasm-longterm-verify`（v0.3.0）
+
+### 修复 —— 产品层自身的 4 个真 bug（写技能文档时逐条实跑压出来的）
+
+这四个都不是"效果差一点"，而是**功能根本没生效**，且失败得毫无痕迹：
+
+1. **`_CoreAdapter` 参数名写错 → 核心档从未启用过**。
+   `LearningEngine` 的参数是 `data_path`，代码写的是 `data_dir`，构造时 `TypeError`
+   被 `except Exception` 静默吞掉 → `_core_ok=False`。**结果：装了 PASM 核心也永远跑轻量档**，
+   "驱动 PASM 真核心"这句话当时是假的。
+2. **`_CoreAdapter.learn_pick(candidates)` 把候选池当成了 epsilon**。
+   `LearningEngine.pick(epsilon=0.15)` 收的是探索率，传 list 直接
+   `TypeError: '<' not supported between 'float' and 'list'`，又被吞掉 → 退化成只有性格。
+   而且 `design()` 从未被调用，学习层连动作池都不认识。
+3. **`BaseAgent.act()` / `feedback()` 被 `_core_ok` 门挡住** → 轻量档下
+   "反馈"只写进历史、**永不影响行为**；而轻量档正是 `pip install pasm-skills` 的默认路径。
+   现在两档走同一套语义：**性格基线（天生偏好）+ 学习权重（反馈塑形）**。
+4. **`companion.py` 缺 `import random`** → 关键事实没命中时 `ElderlyCompanion.chat()`
+   直接抛 `NameError`。老人问一句模板覆盖不到的话就崩，这在陪伴场景是不可接受的。
+
+实测（400 次 act 采样，60 次 praise(hop) + 60 次 scold(wave)）：
+
+| 档位 | `wave` 占比 | `hop` 占比 |
+|---|---|---|
+| `core`（修复后） | 0.31 → **0.04** | 0.36 → **0.84** |
+| `light`（修复后） | 0.24 → **0.00** | 0.23 → **1.00** |
+
+顺带补齐：
+- `LearningTutor.mastery(topic)` / `LearningTutor.snapshot()` —— 之前掌握度只躺在
+  `state.notes["knowledge_state"]` 里，外部要读等于把私有字典当接口用。
+  现在有稳定的机读出口（`mastery` / `weakest` / `average` / `history_size` / `tier`），
+  画像层接的是契约而不是内部结构。
+- `pasm-agents run` 交互命令补齐：`grow` / `facts` / `report <知识点> <分数>` /
+  `next` / `snapshot` / `help`（原先只有 `act` / `mood` / `observe` / `feedback`）。
+  三份技能正文里承诺的命令，现在**逐条实跑验证过**。
+
+> 这四条也说明一件事：**验证智能体目前只体检了 `pasm.cognitive` 核心，没体检 `pasm_agents` 产品层**。
+> 产品层的 bug 是"写文档时逐条跑示例"压出来的，不是智能体抓到的。
+> 下一批验证智能体应该覆盖产品层 —— 这是当前验证覆盖的真实缺口，如实记在这里。
 
 ### 变更 —— 公开仓不携带个人环境信息
 
 - **移除硬编码的本机解释器路径**（`scenarios.py`）。改为按优先级择优：
-  `PASM_TORCH_PYTHON` → `PASM_PYTHON` → **本机配置 `pasm-skills.local.json`（gitignore）**
-  → `sys.executable` → 仓库内 `.venv` / `venv` → `py` → `python3` → `python`。
-  本机那个"带 torch 的解释器"往往在仓库外，所以走**已忽略的本机配置文件**而不是写死在代码里。
+  `PASM_TORCH_PYTHON` → `PASM_PYTHON` → **本机配置** → `sys.executable`
+  → 仓库内 `.venv` / `venv` → `py` → `python3` → `python`。
+  本机配置的查找顺序：`PASM_LOCAL_CONF` env → **`~/.pasm-skills/local.json`（推荐，仓库外）**
+  → `<repo>/pasm-skills.local.json`（兼容，gitignore）。支持 `%%HOME%%` 占位。
+  "带 torch 的那个解释器"本来就在仓库外，所以配置也放仓库外，而不是写死在代码里。
+  （踩到的坑：环境变量 `APPDATA` 被改写时，Python 的 user site-packages 会指向别处，
+  `C:/Python312` 的 torch 就"时有时无"——所以必须指定**自带 site-packages 的 venv**，
+  别依赖 user site。）
 - **回归基线不再记解释器绝对路径**，只记 `Python 版本号 + torch`（`baselines/core.json` 是入库文件，
   不该带个人机器路径；对别人也无参考价值，档位比对只需版本号）。
 - `README.md` 目录与发布章节改写：平台专名从项目文档移出，改按形态（`zip-root` / `slug-dir`）说明；

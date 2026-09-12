@@ -220,16 +220,19 @@ v0.2.x 的 `pasm_skills/agents/` 里全是**验证智能体** —— 跑得动�
 **产品智能体** 是另一个维度：你 `pip install` 完就能 `from pasm_agents import NpcAgent`，
 实例化、写记忆、对话、save —— 是一个**真智能体**。
 
-### 2. 三个开箱即用的产品
+### 2. 三个开箱即用的产品（**各自独立成技能包**）
 
-| Agent | 做什么 | 关键 API |
-|---|---|---|
-| `NpcAgent`         | 游戏 NPC：性格 + 记忆 + 情绪 + 成长动作 | `observe()` / `act()` / `chat()` / `feedback()` / `save()` |
-| `ElderlyCompanion` | 老人陪伴：关键事实 + 用药 + 危机升级 | 同上 + `detect_crisis()` / `escalate()` / `due_medication()` |
-| `LearningTutor`    | 学习陪伴：薄弱点定位 + 巩固计划 | 同上 + `report(topic, score)` / `pick_next()` |
+| Agent | 技能包 | 做什么 | 关键 API |
+|---|---|---|---|
+| `NpcAgent`         | `pasm-npc`       | 游戏 NPC：性格 + 记忆 + 情绪 + 成长动作 | `observe()` / `act()` / `chat()` / `feedback()` / `save()` |
+| `ElderlyCompanion` | `pasm-companion` | 老人陪伴：关键事实 + 用药 + 危机升级 | 同上 + `detect_crisis()` / `escalate()` / `due_medication()` |
+| `LearningTutor`    | `pasm-tutor`     | 学习陪伴：薄弱点定位 + 自适应选题 | 同上 + `report(topic, score)` / `pick_next()` / `mastery()` / `snapshot()` |
 
-三者共享 `BaseAgent`（`pasm_agents/base.py`），
-差异只在 persona / 动作池 / 聊天模板。
+**三者各是一个独立技能包、各自一个 ZIP**（`skill/SKILL.npc.body.md` /
+`SKILL.companion.body.md` / `SKILL.tutor.body.md`），平台上是三个独立入口，
+用户按需只装一个 —— 不是一个大包里塞三个。
+
+三者共享 `BaseAgent`（`pasm_agents/base.py`），差异只在 persona / 动作池 / 聊天模板。
 
 ### 3. 落盘位置
 
@@ -273,8 +276,14 @@ v0.2.x 的 `pasm_skills/agents/` 里全是**验证智能体** —— 跑得动�
                                  from pasm_agents import NpcAgent
 ```
 
-**关键点**：验证层压出的核心修复，在 v0.3.0 已被产品层直接采纳 —— 用户装上 `pasm-agents`
-就在用修过的版本，不需要等下一个核心版本。
+**关键点**：验证层压出的核心修复，在 v0.3.0 已被产品层直接采纳 —— 用户装上 `pasm-npc` /
+`pasm-companion` / `pasm-tutor` 就在用修过的版本，不需要等下一个核心版本。
+
+> ⚠️ **但这个"双向"目前只走了一半**：验证智能体体检的是 `pasm.cognitive` 核心，
+> **没有体检 `pasm_agents` 产品层**。v0.3.0 里产品层自身被压出 4 个真 bug
+> （核心档从未启用、学习层参数传错、轻量档反馈不生效、陪伴聊天会崩），
+> **全是"写技能文档时逐条实跑示例"发现的，不是智能体抓到的**。
+> 下一批该做的就是**产品层验证智能体** —— 这是当前验证覆盖的真实缺口，不粉饰。
 
 ### 6. 自定义你的 Agent
 

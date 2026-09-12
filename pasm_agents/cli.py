@@ -122,7 +122,8 @@ def run_agent(agent_kind: str, agent_id: str, persona_file: Optional[str]) -> in
         raise SystemExit(f"unknown agent kind: {agent_kind}")
     agent = cls(agent_id=agent_id, persona=persona)
     print(f"[ready] {agent!r}  tier={agent.tier}")
-    print("(输入内容直接对话；'act' 看动作；'mood' 看情绪；'quit' 退出并 save)")
+    print("(直接打字对话；命令：act / mood / observe <文本> / feedback <praise|poke|scold> [动作]"
+          " / snapshot / quit)")
     try:
         while True:
             line = input(f"{agent.persona.get('name','agent')}> ").strip()
@@ -130,10 +131,41 @@ def run_agent(agent_kind: str, agent_id: str, persona_file: Optional[str]) -> in
                 continue
             if line in ("quit", "exit", ":q"):
                 break
+            if line == "help":
+                print("  act | mood | observe <文本> | feedback <praise|poke|scold> [动作]"
+                      " | grow | facts | report <知识点> <分数> | next | snapshot | quit")
+                continue
             if line == "act":
                 print("  ", agent.act()); continue
             if line == "mood":
+                # mood 是 @property，别加括号（用 agent.mood() 会 TypeError）
                 print("  ", round(agent.mood, 3)); continue
+            if line == "grow" and hasattr(agent, "grow"):
+                print("  ", agent.grow()); continue
+            if line == "facts":
+                kf = agent.persona.get("key_facts") or []
+                if not kf:
+                    print("   (该 agent 没有 key_facts)")
+                for f in kf:
+                    print("  ", f.get("label"), "->", f.get("content"))
+                continue
+            if line == "next" and hasattr(agent, "pick_next"):
+                print("  ", agent.pick_next()); continue
+            if line == "snapshot":
+                fn = getattr(agent, "snapshot", None) or getattr(agent, "summary", None)
+                if fn:
+                    print("  ", _print_dict(fn()))
+                continue
+            if line.startswith("report ") and hasattr(agent, "report"):
+                parts = line.split()
+                if len(parts) >= 3:
+                    try:
+                        print("  ", _print_dict(agent.report(parts[1], float(parts[2]))))
+                    except ValueError:
+                        print("   用法：report <知识点> <0~1 的分数>")
+                else:
+                    print("   用法：report <知识点> <0~1 的分数>")
+                continue
             if line.startswith("observe "):
                 # 简化：observe 后面整行作为 title
                 agent.observe(line[8:].strip(), salience=2); continue

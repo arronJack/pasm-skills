@@ -119,7 +119,8 @@ class BaseAgent:
             try:
                 from pasm.cognitive import memory_layers, learning  # type: ignore
                 memory_layers.set_data_dir(str(self.persist_dir))
-                self._core = _CoreAdapter(memory_layers, learning)
+                self._core = _CoreAdapter(memory_layers, learning,
+                                          persona=self.persona)
                 self._core_ok = True
             except Exception:
                 self._core_ok = False
@@ -228,18 +229,32 @@ class BaseAgent:
     # ------- 行为 / 学习 --------------------------------------------
 
     def act(self) -> str:
-        """从当前动作池里挑一个。背后调用 LearningEngine.pick()（有学习）/ 按性格加权随机（无学习）。"""
-        pool = self.action_pool()
+        """从当前动作池里挑一个。
+
+        两个档位都走同一套语义：**性格基线（天生偏好）+ 学习权重（反馈塑形）**。
+        早期版本把 `learn_pick` 挡在 `_core_ok` 后面，于是轻量档下反馈只进历史、
+        不影响行为；核心档又因为参数名写错而从未真正启用。
+        现在统一：候选池 + 性格基线一起交给适配层。
+        """
+        pool = list(self.action_pool())
         if not pool:
             return ""
-        if self._core_ok and hasattr(self._core, "learn_pick"):
+        picker = getattr(self._core, "learn_pick", None)
+        if picker is not None:
             try:
-                return self._core.learn_pick(pool)
+                return picker(pool, base=self._fallback_weights(pool),
+                              persona=self.persona,
+                              stage=self.state.growth_stage)
+            except TypeError:
+                # 适配层签名较老：退回位置参数
+                try:
+                    return picker(pool)
+                except Exception:
+                    pass
             except Exception:
                 pass
-        # 降级：persona 加权 + 平稳分布，避免单一动作反复出现
-        w = self._fallback_weights(pool)
-        return random.choices(pool, weights=w, k=1)[0]
+        # 最终兜底：persona 加权随机
+        return random.choices(pool, weights=self._fallback_weights(pool), k=1)[0]
 
     def feedback(self, kind: str, action: Optional[str] = None) -> Dict[str, float]:
         """用户反馈。
@@ -255,7 +270,10 @@ class BaseAgent:
         # 只保留最近 200 条
         if len(self.state.feedback_history) > 200:
             self.state.feedback_history = self.state.feedback_history[-200:]
-        if self._core_ok and hasattr(self._core, "feedback"):
+        # ⚠ 不要加 `self._core_ok and` 这个前置条件 ——
+        # 轻量档同样有 feedback 实现（_LightAdapter），挡掉就等于
+        # "记录了一次反馈，但行为永远不变"。
+        if hasattr(self._core, "feedback"):
             try:
                 return self._core.feedback(kind, action=action)
             except Exception:
@@ -375,9 +393,32 @@ class BaseAgent:
 class _CoreAdapter:
     """把 PASM 真核心包成一个 ``BaseAgent`` 能直接用的薄接口。"""
 
-    def __init__(self, memory_layers, learning):
+    def __init__(self, memory_layers, learning, persona: Optional[dict] = None,
+                 stage: int = 0):
         self._mem = memory_layers
-        self._learning = learning.LearningEngine(data_dir=str(Path.cwd()))
+        # ⚠ 核心 LearningEngine 的参数名是 **data_path**，不是 data_dir。
+        # 曾经写成 data_dir：构造时 TypeError，被 `except Exception` 静默吞掉，
+        # 结果"永远启用不了核心档"——而且失败得毫无痕迹。别再改回去。
+        self._learning = learning.LearningEngine(
+            data_path=str(Path(memory_layers.DATA_DIR) / "action_weights.json")
+        )
+        self._persona = dict(persona or {})
+        self._stage = int(stage or 0)
+        self._designed: List[str] = []
+
+    def _ensure_design(self, pool: List[str], persona=None, stage=None) -> None:
+        """保证学习层认得当前动作池。
+
+        ``LearningEngine`` 只对 ``design()`` 过的动作池有权重，没 design 过时
+        ``pick()`` 直接返回 ``None``。而候选池会随成长阶段 / 子类自定义而变化，
+        所以这里比对一次，变了就重新 design（``design`` 内部会保留已累积的反馈 adj）。
+        """
+        persona = dict(persona or self._persona or {})
+        stage = int(stage if stage is not None else self._stage)
+        if set(pool) == set(self._designed):
+            return
+        self._learning.design(persona, stage, list(pool))
+        self._designed = list(pool)
 
     def episode_push(
         self, *, title, brief, tags, category, salience,
@@ -402,8 +443,24 @@ class _CoreAdapter:
                 out.append({"content": str(h)})
         return out
 
-    def learn_pick(self, candidates: List[str]) -> str:
-        return self._learning.pick(candidates)
+    def learn_pick(self, candidates: List[str], base=None,
+                   persona=None, stage=None) -> str:
+        """按学习层权重在候选池里选一个动作。
+
+        **不要**把候选池当成 ``pick()`` 的位置参数传进去 ——
+        ``LearningEngine.pick(epsilon=0.15)`` 收的是探索率，
+        传 list 会 ``TypeError: '<' not supported between 'float' and 'list'``，
+        然后被上层吞掉、悄悄退化成"只有性格、没有学习"。
+        """
+        pool = [c for c in candidates if c]
+        if not pool:
+            return ""
+        try:
+            self._ensure_design(pool, persona=persona, stage=stage)
+            got = self._learning.pick()
+        except Exception:
+            got = None
+        return got if got in pool else random.choice(pool)
 
     def feedback(self, kind: str, action: Optional[str] = None) -> Dict[str, float]:
         return self._learning.feedback(kind, lr=0.25, action=action)
@@ -495,14 +552,26 @@ class _LightAdapter:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [e for _, e in scored[:k]]
 
-    def learn_pick(self, candidates: List[str]) -> str:
-        # softmax over weights（带温度 1.0）
-        ws = [self._weights.get(c, 0.0) for c in candidates]
-        m = max(ws)
-        exps = [pow(2.71828, w - m) for w in ws]
+    def learn_pick(self, candidates: List[str], base=None, **kw) -> str:
+        """在候选池里按「性格基线 + 反馈学到的偏置」采样。
+
+        `base` 是这个角色的性格基线权重（由 :meth:`BaseAgent._fallback_weights` 算好）。
+        两者**都要生效**：性格决定"天生偏好什么"，反馈决定"被夸/被凶后怎么偏"。
+        早期版本这里只用了学习权重，也没有把候选池送进学习层，
+        导致轻量档下"反馈"记录了却从不影响行为。
+        """
+        pool = [c for c in candidates if c]
+        if not pool:
+            return ""
+        scores = []
+        for i, c in enumerate(pool):
+            b = float(base[i]) if base and i < len(base) else 1.0
+            scores.append(max(0.01, b + float(self._weights.get(c, 0.0))))
+        m = max(scores)
+        exps = [pow(2.71828, s - m) for s in scores]
         s = sum(exps) or 1.0
         probs = [e / s for e in exps]
-        return random.choices(candidates, weights=probs, k=1)[0]
+        return random.choices(pool, weights=probs, k=1)[0]
 
     def feedback(self, kind: str, action: Optional[str] = None) -> Dict[str, float]:
         delta = {
