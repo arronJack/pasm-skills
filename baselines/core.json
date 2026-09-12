@@ -1,0 +1,47 @@
+{
+  "collected_at": "2026-09-12 13:22:42",
+  "core": {
+    "cognitive": {
+      "__init__.py": "389fc42e27f63879",
+      "agent_team.py": "517e63b217faee63",
+      "coder.py": "de0546cc70c67b3c",
+      "cog.py": "d0f0e4366c5db3aa",
+      "learning.py": "8bfae952c6507ca6",
+      "mathlab.py": "ac034da5ffe65f0b",
+      "memory_layers.py": "8424f0829e1775bf",
+      "memrouter.py": "135269e62ffb101e",
+      "memvec.py": "09a90ab13b1fc164",
+      "percept.py": "898e7f488fd05be5",
+      "quantum.py": "5b1a1002952e433f",
+      "selfheal.py": "87de5d516b30db77",
+      "symbolic.py": "5b103422ad1a170e",
+      "workctx.py": "c8d0309fa78027f4"
+    },
+    "envs": {
+      "__init__.py": "abdc9206f37ef70f",
+      "gridworld.py": "c6402f0e08041082"
+    },
+    "engine_api": "95cd83aa75dc5688",
+    "api": "1.1",
+    "engines": [
+      "pasm",
+      "pasm-light"
+    ],
+    "errors": []
+  },
+  "lite": {
+    "files": {
+      "pasm_lite.py": "8a2ac37bae9b2b8a",
+      "learning.py": "f79c707c84690f0b",
+      "engine.py": "ade5c71b7bae3ceb",
+      "engine_api.py": "915197f511dd1ecc",
+      "envs.py": "5652f844fa98a6f8",
+      "verify_swap.py": "61baeb7537eae4b7"
+    },
+    "errors": [],
+    "engines": [
+      "pasm",
+      "pasm-light"
+    ]
+  }
+}

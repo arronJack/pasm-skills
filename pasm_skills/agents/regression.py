@@ -26,14 +26,17 @@ def h(p):
         return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
     except Exception:
         return None
-out = {"cognitive": {}, "api": None, "engines": [], "errors": []}
-base = os.path.join("pasm", "cognitive")
-if os.path.isdir(base):
-    for fn in sorted(os.listdir(base)):
-        if fn.endswith(".py"):
-            out["cognitive"][fn] = h(os.path.join(base, fn))
-else:
-    out["errors"].append("pasm/cognitive 目录不存在")
+out = {"cognitive": {}, "envs": {}, "engine_api": None, "api": None,
+       "engines": [], "errors": []}
+for sub in ("cognitive", "envs"):
+    base = os.path.join("pasm", sub)
+    if os.path.isdir(base):
+        for fn in sorted(os.listdir(base)):
+            if fn.endswith(".py"):
+                out[sub][fn] = h(os.path.join(base, fn))
+    else:
+        out["errors"].append("pasm/%s 目录不存在" % sub)
+out["engine_api"] = h(os.path.join("pasm", "engine_api.py"))
 try:
     from pasm import engine_api as ea
     out["api"] = getattr(ea, "API_VERSION", None)
@@ -51,7 +54,8 @@ def h(p):
     except Exception:
         return None
 out = {"files": {}, "errors": []}
-for fn in ("pasm_lite.py", "learning.py", "engine.py", "engine_api.py"):
+for fn in ("pasm_lite.py", "learning.py", "engine.py", "engine_api.py",
+           "envs.py", "verify_swap.py"):
     if os.path.exists(fn):
         out["files"][fn] = h(fn)
 try:
@@ -119,6 +123,10 @@ class RegressionAgent(Agent):
 
         self._diff_hashes("核心认知层", old.get("core", {}).get("cognitive", {}),
                           snapshot["core"].get("cognitive", {}))
+        self._diff_hashes("核心环境层", old.get("core", {}).get("envs", {}),
+                          snapshot["core"].get("envs", {}))
+        self._diff_scalar("engine_api 指纹", old.get("core", {}).get("engine_api"),
+                          snapshot["core"].get("engine_api"))
         self._diff_hashes("Lite 源码", old.get("lite", {}).get("files", {}),
                           snapshot["lite"].get("files", {}))
         self._diff_list("核心可用引擎", old.get("core", {}).get("engines", []),

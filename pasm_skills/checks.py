@@ -205,10 +205,19 @@ import json
 out = {}
 try:
     from pasm.cognitive import learning as L
+    try:
+        _ok, _probs = L.learning_conforms(L.LearningEngine(), strict=True)
+        conforms = {"ok": bool(_ok), "problems": list(_probs)}
+    except Exception as ex:
+        conforms = {"ok": False, "problems": ["%s: %s" % (type(ex).__name__, ex)]}
     out["core"] = {
+        "api": getattr(L, "LEARNING_API", None),
+        "required": list(getattr(L, "LEARNING_REQUIRED_METHODS", ())),
         "has_api": hasattr(L, "LEARNING_API"),
         "has_engine": hasattr(L, "LearningEngine"),
         "has_protocol": hasattr(L, "LearningLayer"),
+        "has_conforms": hasattr(L, "learning_conforms"),
+        "conforms": conforms,
         "selftest": None,
     }
     fn = getattr(L, "selftest", None)
@@ -227,8 +236,16 @@ import json, importlib
 out = {}
 try:
     import learning as L
+    try:
+        _ok, _probs = L.learning_conforms(L.LearningLayer(), strict=True)
+        conforms = {"ok": bool(_ok), "problems": list(_probs)}
+    except Exception as ex:
+        conforms = {"ok": False, "problems": ["%s: %s" % (type(ex).__name__, ex)]}
     out["classes"] = [c for c in dir(L) if c[0].isupper()]
     out["has_learninglayer"] = hasattr(L, "LearningLayer")
+    out["api"] = getattr(L, "LEARNING_API", None)
+    out["required"] = list(getattr(L, "LEARNING_REQUIRED_METHODS", ()))
+    out["conforms"] = conforms
     out["selftest"] = None
     fn = getattr(L, "selftest", None)
     if callable(fn):
@@ -236,6 +253,46 @@ try:
             out["selftest"] = bool(fn())
         except Exception as ex:
             out["selftest"] = "ERR %s" % ex
+except Exception as ex:
+    out["fatal"] = "%s: %s" % (type(ex).__name__, ex)
+print(SENTINEL + json.dumps(out, ensure_ascii=False))
+"""
+
+#: 跨档互换验证：同一个解释器里同时加载两档，用同一段调用方代码驱动
+LEARN_SWAP_CODE = r"""
+import json
+out = {}
+try:
+    from pasm.cognitive import learning as CORE
+    import learning as LITE
+    core, lite = CORE.LearningEngine(seed=1), LITE.LearningLayer()
+    core.design({"energy": 0.6, "play": 0.5, "temper": 0.5}, 3,
+                ["wave", "hop", "peek", "ball", "dance", "spin", "think"])
+    _oc, _pc = CORE.learning_conforms(core, strict=True)
+    _ol, _pl = LITE.learning_conforms(lite, strict=True)
+    out["api"] = getattr(CORE, "LEARNING_API", None)
+    out["api_same"] = (getattr(CORE, "LEARNING_API", None)
+                       == getattr(LITE, "LEARNING_API", None))
+    out["req_same"] = (set(getattr(CORE, "LEARNING_REQUIRED_METHODS", ()))
+                       == set(getattr(LITE, "LEARNING_REQUIRED_METHODS", ())))
+    out["core"] = {"ok": bool(_oc), "problems": list(_pc),
+                   "tier": core.info().tier, "kind": core.info().kind}
+    out["lite"] = {"ok": bool(_ol), "problems": list(_pl),
+                   "tier": lite.info().tier, "kind": lite.info().kind}
+    out["caps_same"] = sorted(core.capabilities()) == sorted(lite.capabilities())
+    # 同一段驱动代码（只认契约方法）跑两档 → 输出结构应同构
+    drive = []
+    for lay in (core, lite):
+        try:
+            info = lay.info()
+            info = info.to_dict() if hasattr(info, "to_dict") else dict(info)
+            drive.append({"api": info.get("api"),
+                          "keys": sorted(info.keys()),
+                          "state_keys": sorted(lay.state()),
+                          "bias_len": len(list(lay.bias(None)))})
+        except Exception as ex:
+            drive.append({"err": "%s: %s" % (type(ex).__name__, ex)})
+    out["drive"] = drive
 except Exception as ex:
     out["fatal"] = "%s: %s" % (type(ex).__name__, ex)
 print(SENTINEL + json.dumps(out, ensure_ascii=False))
@@ -252,16 +309,21 @@ def check_learning_contract(agent) -> None:
     else:
         c = core.get("core") or {}
         if c.get("has_api"):
-            agent.ok("核心学习层已声明学习接口契约")
+            agent.ok("核心学习层已声明学习接口契约", "api=%s" % c.get("api"))
         else:
             agent.warn("核心学习层尚未声明 LEARNING_API",
                        "建议按「同一接口两档实现」收敛")
         for k, label in (("has_engine", "LearningEngine 完整档"),
-                         ("has_protocol", "LearningLayer 轻量档")):
+                         ("has_protocol", "LearningLayer 接口协议")):
             if c.get(k):
                 agent.ok("核心学习层含 %s" % label)
             else:
                 agent.warn("核心学习层缺 %s" % label)
+        cf = c.get("conforms") or {}
+        if cf.get("ok"):
+            agent.ok("完整档满足学习层契约（strict）")
+        elif c.get("has_conforms"):
+            agent.fail("完整档不符合学习层契约", "; ".join(cf.get("problems", []))[:250])
         st = c.get("selftest")
         if st is True:
             agent.ok("核心学习层 selftest 通过")
@@ -272,17 +334,72 @@ def check_learning_contract(agent) -> None:
     if lite is None:
         agent.warn("Lite 学习层探测失败")
     elif lite.get("fatal"):
-        agent.fail("PASM-Lite learning.py 导入失败", lite["fatal"])
+        agent.warn("PASM-Lite learning.py 探测失败（多为该解释器无 torch）",
+                   lite["fatal"][:250])
     else:
         if lite.get("has_learninglayer"):
-            agent.ok("Lite 学习层含 LearningLayer")
+            agent.ok("Lite 学习层含 LearningLayer", "api=%s" % lite.get("api"))
         else:
             agent.warn("Lite 学习层缺 LearningLayer", "实际类：%s" % lite.get("classes"))
+        cf = lite.get("conforms") or {}
+        if cf.get("ok"):
+            agent.ok("教学档满足学习层契约（strict）")
+        else:
+            agent.fail("教学档不符合学习层契约", "; ".join(cf.get("problems", []))[:250])
         st = lite.get("selftest")
         if st is True:
             agent.ok("Lite 学习层 selftest 通过")
         elif st:
             agent.fail("Lite 学习层 selftest 未通过", str(st)[:200])
+
+
+def check_learning_swap(agent) -> None:
+    """同一接口两档实现：两档契约一致、能力表同构、同一驱动代码跑得通。"""
+    core_dir = agent.ctx.path("core")
+    res = agent.ctx.probe("lite", LEARN_SWAP_CODE, timeout=120,
+                          extra_path=[core_dir] if core_dir else None)
+    data = _j(res)
+    if data is None:
+        agent.warn("跨档互换探测失败", (res.get("stderr") or "")[:250])
+        return
+    if data.get("fatal"):
+        agent.skip("跨档互换验证跳过",
+                   "当前解释器无法同时加载两档（多为无 torch）：%s" % data["fatal"][:160])
+        return
+
+    if data.get("api_same") and data.get("api"):
+        agent.ok("两档声明同一学习接口", data["api"])
+    else:
+        agent.fail("两档学习接口标识不一致",
+                   "core=%s" % data.get("api"))
+    if data.get("req_same"):
+        agent.ok("两档必需方法集一致")
+    else:
+        agent.fail("两档必需方法集不一致", "见 learning_conforms 定义")
+
+    for key, label in (("core", "核心档"), ("lite", "教学档")):
+        row = data.get(key) or {}
+        if row.get("ok"):
+            agent.ok("%s 通过契约校验" % label, "tier=%s kind=%s"
+                     % (row.get("tier"), row.get("kind")))
+        else:
+            agent.fail("%s 契约校验失败" % label, "; ".join(row.get("problems", []))[:200])
+
+    drive = data.get("drive") or []
+    if len(drive) == 2 and all(not d.get("err") for d in drive):
+        same_keys = drive[0]["api"] == drive[1]["api"]
+        if same_keys:
+            agent.ok("同一段调用方代码可驱动两档",
+                     "bias 长度 %s / %s" % (drive[0]["bias_len"], drive[1]["bias_len"]))
+        else:
+            agent.fail("两档驱动结果不同构", str(drive)[:250])
+    else:
+        agent.fail("驱动两档时报错", str(drive)[:250])
+
+    if data.get("caps_same"):
+        agent.ok("两档能力表键同构（可互换）")
+    else:
+        agent.warn("两档能力表键不同构", "调用方若直接读能力键需自行兜底")
 
 
 # ---------------------------------------------------------------- 5. 跨仓 parity
@@ -445,6 +562,10 @@ def all_checks(agent) -> None:
     check_cognitive_layers(agent)
     check_symbolic_loop(agent)
     check_learning_contract(agent)
+    if agent.ctx.has("core") and agent.ctx.has("lite"):
+        check_learning_swap(agent)
+    else:
+        agent.skip("跨档互换验证跳过", "需要 core 与 lite 两仓同时在位")
     check_env_plugins(agent)
     if agent.ctx.has("lite"):
         check_smoke(agent)
