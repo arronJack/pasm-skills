@@ -289,7 +289,8 @@ class BaseAgent:
         temper = float(self.persona.get("temper", 0.5))
         energy = float(self.persona.get("energy", 0.5))
         play = float(self.persona.get("play", 0.5))
-        # 用 action 名的关键词做软匹配（子类可扩展 ACT_BIAS）
+        # 用 action 名的关键词做软匹配。想让自己的动作名被识别，
+        # 要么在名字里带下列关键词，要么在子类里覆盖本方法（没有 ACT_BIAS 之类的配置项）。
         weights = []
         for a in pool:
             w = 1.0

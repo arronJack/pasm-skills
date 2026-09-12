@@ -1,13 +1,17 @@
 """命令行入口。
 
-    python -m pasm_skills list                      # 智能体清单 + 三仓定位
+    python -m pasm_skills list                      # 已发现的智能体 + 三仓定位
     python -m pasm_skills repos                     # 只看仓库定位
     python -m pasm_skills run core-verifier         # 跑一个智能体
-    python -m pasm_skills run --all                 # 跑全部
+    python -m pasm_skills run --all                 # 跑全部（发现的全部）
     python -m pasm_skills run regression --update   # 刷新事实基线
     python -m pasm_skills selftest                  # 自检（零依赖，随时可跑）
+    python -m pasm_skills agents                    # 只列出智能体加载来源（排障用）
 
 退出码：0 = 全部通过；1 = 有 FAIL；2 = 用法/定位错误。
+
+**基座不内置智能体**：具体智能体由外部包通过 entry points
+（组名 `pasm_skills.agents`）或 `PASM_SKILLS_PATH` / `PASM_SKILLS_AGENT_MODULES` 提供。
 """
 from __future__ import annotations
 
@@ -20,24 +24,7 @@ from typing import List
 from . import __version__
 from .agent import AGENTS, catalog, names, run_agent
 from .context import REPO_SPEC, RepoContext
-from . import agents as _builtin_agents  # noqa: F401  触发内置智能体注册
-
-
-def _load_user_agents() -> None:
-    """加载 `PASM_SKILLS_PATH` 里用户自带的智能体模块（可选）。"""
-    import importlib.util
-    import os
-    raw = os.environ.get("PASM_SKILLS_PATH", "")
-    for entry in [p for p in raw.split(os.pathsep) if p.strip()]:
-        p = Path(entry)
-        files = [p] if p.is_file() and p.suffix == ".py" else list(p.glob("*.py"))
-        for f in files:
-            try:
-                spec = importlib.util.spec_from_file_location("pasm_skills_user_%s" % f.stem, f)
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)          # noqa: S301
-            except Exception as ex:                   # noqa: BLE001
-                print("[WARN] 用户智能体加载失败 %s: %s" % (f, ex), file=sys.stderr)
+from .discovery import ENTRY_POINT_GROUP, load_agents
 
 
 def _ctx() -> RepoContext:
@@ -46,18 +33,36 @@ def _ctx() -> RepoContext:
 
 def cmd_list(args) -> int:
     ctx = _ctx()
-    print("PASM Skills v%s" % __version__)
+    print("PASM Skills v%s（基座）" % __version__)
     print()
     print("仓库定位：")
     for key, path in ctx.describe().items():
         flag = "[OK]  " if path else "[MISS]"
         print("  %s %-7s %s" % (flag, key, path or "未找到（可用 %s 指定）" % REPO_SPEC[key][0]))
     print()
-    print("可用智能体 %d 个：" % len(names()))
+    found = names()
+    print("已发现的智能体 %d 个：" % len(found))
+    if not found:
+        print("  （无）基座不内置智能体。装一个智能体包即可：")
+        print("      pip install pasm-agents       # 官方智能体集（NPC / 陪伴 / 教学 / 验证）")
+        print("  或指向本地目录：")
+        print("      PASM_SKILLS_PATH=/path/to/my_agents python -m pasm_skills list")
     for item in catalog():
         print("  · %-14s %s" % (item["name"], item["goal"]))
         if item["needs"]:
             print("    %-14s 需要仓库：%s" % ("", ", ".join(item["needs"])))
+    return 0
+
+
+def cmd_agents(args) -> int:
+    """只报告智能体是从哪儿加载进来的（排障用）。"""
+    loaded, _ = load_agents()
+    print("entry point 组名：%s" % ENTRY_POINT_GROUP)
+    print("已加载 %d 个来源：" % len(loaded))
+    for src in loaded:
+        print("  · %s" % src)
+    print()
+    print("注册表中的智能体 %d 个：%s" % (len(names()), ", ".join(names()) or "（无）"))
     return 0
 
 
@@ -71,7 +76,7 @@ def cmd_run(args) -> int:
     ctx = _ctx()
     targets: List[str] = names() if args.all else list(args.agents or [])
     if not targets:
-        print("请指定智能体名，或用 --all。可用：%s" % ", ".join(names()))
+        print("请指定智能体名，或用 --all。可用：%s" % (", ".join(names()) or "（无）"))
         return 2
 
     options = {"update": bool(args.update), "baseline": args.baseline}
@@ -109,18 +114,20 @@ def cmd_selftest(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="pasm_skills",
-                                description="PASM 智能体工坊 —— 对核心内容做长期验证")
+    p = argparse.ArgumentParser(
+        prog="pasm-skills",
+        description="PASM 智能体基座 —— 写/跑基于 PASM 引擎的智能体（框架、SDK、打包工具）")
     p.add_argument("--version", action="version", version="pasm-skills %s" % __version__)
     sub = p.add_subparsers(dest="cmd")
 
-    sub.add_parser("list", help="列出智能体与仓库定位").set_defaults(func=cmd_list)
+    sub.add_parser("list", help="列出已发现的智能体与仓库定位").set_defaults(func=cmd_list)
+    sub.add_parser("agents", help="只报告智能体加载来源（排障）").set_defaults(func=cmd_agents)
     sub.add_parser("repos", help="只打印仓库定位").set_defaults(func=cmd_repos)
     sub.add_parser("selftest", help="框架自检").set_defaults(func=cmd_selftest)
 
     r = sub.add_parser("run", help="运行智能体")
     r.add_argument("agents", nargs="*", help="智能体名（可多个）")
-    r.add_argument("--all", action="store_true", help="运行全部智能体")
+    r.add_argument("--all", action="store_true", help="运行全部已发现的智能体")
     r.add_argument("--json", action="store_true", help="输出 JSON")
     r.add_argument("--out", default="", help="把 JSON 结论写到文件")
     r.add_argument("--quiet", action="store_true", help="只显示非 OK 结论")
@@ -131,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: List[str] | None = None) -> int:
-    _load_user_agents()
+    load_agents()                       # 先发现外部智能体，再解析参数
     args = build_parser().parse_args(argv)
     if not getattr(args, "cmd", None):
         build_parser().print_help()

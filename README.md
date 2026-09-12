@@ -1,246 +1,183 @@
-# PASM Skills · 智能体工坊
+# PASM Skills · 智能体基座
 
-> **本仓是 PASM 的"产品智能体"与"质量守门员"的两层工坊。**
+> **本仓是基座：只提供"写智能体"的能力，不提供成品智能体。**
+> 想直接拿现成的智能体用（游戏 NPC / 老人陪伴 / 学习陪伴 / 长期验证），
+> 装独立公开仓 **pasm-agents**。
 >
-> **产品层** 提供三个**各自独立**、基于 PASM 引擎、可立即装载使用的智能体：
-> 游戏 NPC / 老人陪伴 / 学习陪伴。零 LLM 依赖、断网可用、状态可持久化。
->
-> **验证层** 提供四类对 PASM 核心做长期体检的智能体：核心契约 /
-> 仓对齐 / 回归基线 / 长效耐久 —— **这些"质检智能体"反过来给产品层兜底**。
->
-> 三个产品智能体**各是一个独立技能包**（`pasm-npc` / `pasm-companion` / `pasm-tutor`），
-> 各自有独立的 ZIP，可以按需只装一个。
+> ```bash
+> pip install pasm-skills      # 基座：SDK + 框架 + 打包工具（零依赖）
+> pip install pasm-agents      # 成品智能体集（依赖本基座）
+> ```
+
+基座给你三样东西：
+
+| | 是什么 | 入口 |
+|---|---|---|
+| **SDK** | `BaseAgent` —— 记忆 / 情绪 / 动作 / 反馈 / 持久化开箱可用 | `from pasm_skills.sdk import BaseAgent` |
+| **框架** | 智能体基类与注册表、仓隔离探测、场景仿真底座、核心契约检查工具箱 | `from pasm_skills.agent import Agent, register` |
+| **打包** | 把智能体打成平台可直接上传的技能包（两种归档形态） | `from pasm_skills.build import SkillSpec, run_cli` |
 
 ---
 
-## 一、产品智能体（pasm_agents）
-
-**它们是真智能体，不是测试**。三个各自独立：
-
-| 技能包 | 类 | 一句话 |
-|---|---|---|
-| `pasm-npc` | `NpcAgent` | 游戏 NPC：性格 + 记忆 + 情绪 + 成长动作 |
-| `pasm-companion` | `ElderlyCompanion` | 老人陪伴：关键事实 100% 记忆 + 危机升级 |
-| `pasm-tutor` | `LearningTutor` | 学习陪伴：薄弱点定位 + 自适应选题 |
-
-每个都有独立的 SKILL.md 与上传 ZIP；`pip install` 完之后直接 `import`：
+## 一、30 秒写一个智能体
 
 ```python
-from pasm_agents import NpcAgent, ElderlyCompanion, LearningTutor
+from pasm_skills.sdk import BaseAgent
 
-# ① 河边摆摊的草药老头 —— 有记忆、有性格、能被反馈调整
-npc = NpcAgent(agent_id="herbalist", persona={
-    "name": "陈伯", "role": "河边摆摊的草药老头",
-    "temper": 0.55, "energy": 0.40, "play": 0.30, "tone": "慢悠悠、爱讲道理",
-})
-npc.observe("玩家第一次来买跌打药", tags=["玩家", "买药"], salience=4)
-print(npc.act())                 # 'talk' / 'wave' / 'peek' / ...
-print(npc.mood)                  # 情绪（属性，不加括号）
-npc.feedback("praise", action="talk")   # 显式指明夸的是哪个动作
+class TeaHouseOwner(BaseAgent):
+    def action_pool(self):                  # 能做什么
+        return ["greet", "brew", "gossip", "rest"]
 
-# ② 老人陪伴 —— 关键事实直查 + 危机升级
-comp = ElderlyCompanion(agent_id="chenxiulan", persona={
-    "name": "陈秀兰", "age": 78,
-    "key_facts": [
-        {"label": "用药", "content": "每天早 8 点吃降压药络活喜 5mg"},
-        {"label": "过敏", "content": "青霉素过敏"},
-        {"label": "家人", "content": "女儿在深圳，每周日来电话"},
-        {"label": "本人", "content": "78 岁，独居"},
-    ],
-    "emergency_contact": {"name": "女儿小敏", "phone": "13900000000"},
-    "medication_schedule": [{"name": "络活喜", "dose": "5mg", "hour": 8}],
-})
-print(comp.chat("我吃什么药"))           # 标签直查 → 命中率 100%
-print(comp.detect_crisis("卫生间滑倒"))  # ['摔倒/外伤']
-print(comp.escalate("卫生间滑倒"))       # 写入紧急记忆 + 返回升级上下文
+    def _render_reply(self, text, facts, mood):   # 怎么回
+        tone = "蔫" if mood < -0.2 else "乐"
+        return f"（{tone}）{self.persona.get('name')}：来了您呐"
 
-# ③ 学习陪伴 —— 薄弱点定位 + 自适应选题
-t = LearningTutor(agent_id="xiaoya", persona={
-    "name": "小雅", "grade": "五年级",
-    "topics": ["分数加减", "面积计算", "行程问题", "鸡兔同笼"],
-})
-t.report("分数加减", 0.4)
-print(t.pick_next())        # 最弱优先
-print(t.mastery("面积计算"))
-print(t.snapshot())         # 学情 JSON，画像层可直接消费
+a = TeaHouseOwner(agent_id="owner", persona={"name": "王掌柜", "temper": 0.6, "energy": 0.3})
+a.observe("客人夸今年的龙井好", salience=3, tags=["茶"])   # 写记忆（重要度参与淘汰）
+print(a.act())                                  # 'brew' / 'greet' / ...
+print(a.chat("生意怎么样"))                      # 走 _render_reply
+print(a.mood)                                   # 情绪（属性，不加括号）
+a.feedback("praise", action="brew")             # 显式夸"brew"这个动作 → 它会更常出现
+a.save()                                        # ~/.pasm-agents/owner/
 ```
 
-### 30 秒上手
+跑一个完整走查（8 个环节 + 反馈塑形的实测对比）：
 
 ```bash
 git clone https://gitee.com/arronzheng/pasm-skills
 cd pasm-skills
-pip install -e .
-
-# 三个智能体各有预置剧本 —— 立刻看到效果，无需任何环境
-pasm-agents demo npc
-pasm-agents demo companion
-pasm-agents demo tutor
-
-# 交互模式（quit 退出并 save）
-pasm-agents run npc --id=my_herbalist
-pasm-agents run companion --id=my_companion --persona-file=personas/chenxiulan.json
-pasm-agents run tutor --id=my_tutor
-
-pasm-agents list
-pasm-agents inspect my_herbalist
+python examples/build_your_agent.py
+python templates/agent_template.py        # 骨架自带的冒烟
 ```
 
-### 落盘位置
-
-`~/.pasm-agents/<agent_id>/`
-
-```
-agent_state.json       # 状态（persona / 交互数 / 反馈历史 / mood / notes）
-episodes.json          # 轻量档下的记忆（核心档走 pasm.cognitive.memory_layers）
-action_weights.json    # 动作权重（性格基线 + 反馈累积）
-```
-
-### 档位透明 —— 不隐藏降级
-
-| 档位 | 含义 | 何时启用 |
-|---|---|---|
-| `bionic` | 仿生：完整 PASM 核心 + emotion 模块（需 torch） | `pip install pasm-skills[torch]` 并装有 torch 时 |
-| `core`    | 完整：PASM 核心（memory + learning，不需 torch） | 装了 PASM 核心（可 import `pasm.cognitive`）时 |
-| `light`   | 轻量：纯内置（重要度淘汰 + 字面检索 + softmax 权重） | 任何机器都可跑 |
-
-每个 agent 的 `summary()` / 落盘 JSON 都会带 `tier` 字段，调用方一眼就能判断当前档位。
+**手把手教程**：[`docs/BUILD-AGENT.md`](docs/BUILD-AGENT.md)
 
 ---
 
-## 二、质量守门员（pasm_skills.agents）—— *反向* 守住产品层
+## 二、基座负责什么 / 不负责什么
 
-产品层有了，但"它跑久了还是好的吗？"这类问题**产品层自己答不上来**。
-于是本仓还有第二层：**对 PASM 核心做长期行为体检**。
+| 基座负责 | 基座不负责 |
+|---|---|
+| ✅ 记忆写入 / 重要度淘汰 / 检索 | ❌ 具体某个智能体的人格与话术 |
+| ✅ 情绪状态与渲染（有 torch 时接真人格模块） | ❌ 具体业务逻辑（用药提醒、选题策略…） |
+| ✅ 动作选择（性格基线 + 反馈塑形） | ❌ 调用哪个大模型（**基座零 LLM 依赖**） |
+| ✅ 状态落盘与跨进程恢复 | ❌ 具体智能体的测试与验收标准 |
+| ✅ 档位检测与如实降级标注 | ❌ 替你把降级藏起来 |
+| ✅ 技能包打包（两种归档形态） | ❌ 替你上传到平台 |
 
-这些不是"模拟跑 90 天然后 [OK] / [FAIL]" 的检查项，
-是**智能体** —— 每个都驱动核心真实组件，隔离子进程跑几天，跑完后压出真实问题。
-
-| 验证智能体 | 检查什么 | 当前结果 |
-|---|---|---|
-| `core-verifier`     | 32 项核心契约 / 安全底线 / 环境插件 | 33 ok / 1 warn / 0 fail |
-| `parity-guard`      | 两仓核心内容逐字一致 | OK |
-| `regression`        | 关键指纹与基线比对（基线解释器档位锁定） | OK |
-| `npc-lifelong`      | 90 天 / 270 段经历 —— 核心能否正确记忆 NPC | 19 ok / 0 warn / 0 fail |
-| `companion-elderly` | 30 天老人陪伴 —— 关键事实 100% 检索、危机命中 | 13 ok / 4 warn |
-| `study-tutor`       | 30 天学习陪伴 —— 学情结构 + 巩固 | 14 ok / 1 warn |
-| `soak-longrun`      | 6000 步认知 + 行为 + 记忆洪峰 —— 长效耐久 | 13 ok / 2 warn |
-
-> 这层**反向**帮产品层兜底：
-> 验证智能体压出的「同分排序崩溃 / 容量淘汰无重要度 / 反馈无法指定动作」等真问题，
-> 已经被修进 `pasm_agents/base.py` 的 `_CoreAdapter` 里 —— **产品层在用就是修过的版本**。
+**基座不内置任何智能体**，这是刻意的：`python -m pasm_skills list` 在干净环境下
+会显示 0 个智能体，并提示你装一个。
 
 ---
 
-## 三、安装
+## 三、档位透明（永不隐藏降级）
 
-```bash
-# 纯产品层（无 torch 也能跑，tier=light）
-pip install pasm-skills
+| tier | 依赖 | 得到什么 |
+|---|---|---|
+| `light` | 无 | 纯内置：重要度淘汰 + 字面检索 + 性格/反馈加权 |
+| `core` | 能 `import pasm.cognitive`（**不需要 torch**） | 真 `memory_layers`（分层记忆）+ `learning.LearningEngine` |
+| `bionic` | 上面 + torch | 再加真情绪 / 人格模块 |
 
-# 想要完整档位（tier=core / bionic）
-pip install pasm-skills[torch]
+**三个档位下接口完全一致** —— 调用方不写分支，但 `agent.tier` 一定会如实告诉你现在在哪一档。
 
-# 开发模式
-git clone https://gitee.com/arronzheng/pasm-skills
-cd pasm-skills
-pip install -e .
-```
-
-无 torch 时，`pasm-agents demo` / `pasm-skills run` 都正常 —— `tier` 字段会如实告诉你当前在哪一档。
+---
 
 ## 四、目录
 
 ```
 pasm-skills/
-├── pasm_agents/             ★ 产品智能体（打开仓第一眼应该看到的）
-│   ├── base.py              BaseAgent：观测/记忆/情绪/动作/反馈/持久化
-│   ├── npc.py               NpcAgent —— 游戏 NPC
-│   ├── companion.py         ElderlyCompanion —— 老人陪伴
-│   ├── tutor.py             LearningTutor —— 学习陪伴
-│   └── cli.py               pasm-agents 命令行
+├── pasm_skills/                 ★ 基座本体
+│   ├── sdk/                     ★ SDK：BaseAgent（写智能体从这里开始）
+│   │   └── base.py              记忆 / 情绪 / 动作 / 反馈 / 持久化 + 两个适配层
+│   ├── agent.py                 框架：Agent 基类 / AgentResult / Finding / 注册表
+│   ├── discovery.py             智能体发现（entry points / PASM_SKILLS_PATH）
+│   ├── context.py               仓隔离探测（RepoContext）
+│   ├── scenarios.py             场景仿真底座（解释器择优 / PRELUDE / 阈值判定）
+│   ├── checks.py                核心契约检查工具箱
+│   ├── build.py                 ★ 技能包打包库（两种归档形态）
+│   └── cli.py                   pasm-skills 命令行
 │
-├── pasm_skills/             ★ 质量守门员（质检智能体）
-│   ├── agents/              7 个验证智能体（core/parity/regression + 4 领域）
-│   ├── scenarios.py         场景仿真底座
-│   ├── checks.py            32 项核心契约 + 安全底线
-│   ├── agent.py             Agent 基类
-│   ├── context.py           仓上下文
-│   └── cli.py               pasm-skills 命令行
+├── templates/                   ★ 脚手架：复制就能改
+│   ├── agent_template.py        智能体骨架（自带冒烟）
+│   └── SKILL.template.body.md   技能正文模板
 │
-├── examples/                可直接运行的 30 秒示例（每类智能体一个）
+├── examples/                    可跑示例（不依赖任何成品智能体）
+│   └── build_your_agent.py      从零到落盘的完整走查
 │
-├── docs/                    选型分析 / 架构说明 / 服务器需求评估
-│   ├── AGENTS.md            智能体设计手册（验证 + 产品两章）
-│   ├── ARCHITECTURE.md
-│   └── SERVER-NEEDS.md
+├── skill/                       ★ 基座自己的技能正文
+│   └── SKILL.authoring.body.md  「怎么写 PASM 智能体 + 打技能包」
 │
-├── skill/                   ★ 技能包正文（一个智能体一份，共 4 份）
-│   ├── SKILL.npc.body.md
-│   ├── SKILL.companion.body.md
-│   ├── SKILL.tutor.body.md
-│   └── SKILL.verify.body.md
+├── tools/
+│   └── build_skill.py           声明本仓技能 → 调用 pasm_skills.build
 │
-├── tools/                   打包脚本
-├── baselines/               事实基线（regression 用，建议入库）
-└── reports/                 本地跑出来的报告（gitignore）
+└── docs/
+    ├── BUILD-AGENT.md           ★ 手把手：从零做一个智能体
+    ├── SKILL-FORMAT.md          ★ 技能包格式与两种归档形态
+    ├── ARCHITECTURE.md          框架分层与设计取舍
+    └── SERVER-NEEDS.md          服务器需求评估（结论：不需要）
 ```
 
-## 五、发布
+---
 
-技能包由**一个正文 → 两种归档形态**生成 —— 按**结构**命名，不按平台名（平台会变，结构不会）：
-
-| 形态 | 归档结构 | frontmatter | 产物 |
-|---|---|---|---|
-| `zip-root` | ZIP **根目录直接是 `SKILL.md`** | 完整（display_name / description_zh / description_en / requires） | `dist/zip-root/<name>/SKILL.md` |
-| `slug-dir` | 以 slug 命名的**目录**，内含 `SKILL.md` | 最小（name / description / version / license / metadata） | `dist/slug-dir/<name>/SKILL.md` |
+## 五、命令行
 
 ```bash
-python tools/build_skill.py --zip --clean
-python tools/build_skill.py --name pasm-npc --zip   # 只打一个
+python -m pasm_skills selftest        # 自检：SDK / 框架 / 发现机制（零依赖）
+python -m pasm_skills list            # 已发现的智能体 + 三仓定位
+python -m pasm_skills agents          # 只报告智能体从哪加载进来（排障）
+python -m pasm_skills repos           # 只打印仓库定位
+python -m pasm_skills run <name>      # 跑一个智能体
+python -m pasm_skills run --all       # 跑全部已发现的
 ```
 
-> ⚠️ `zip-root` 形态**必须**把 `SKILL.md` 放在 ZIP 根目录。包成 `skills/<name>/SKILL.md`
-> 会被平台拒收（报「压缩包缺少 SKILL.md 文件」）—— 平台不递归找。脚本已内置校验。
+退出码：`0` 全部通过 / `1` 有 FAIL / `2` 用法错误 —— 可直接用于 CI。
 
-四个技能包，各自独立上传：
+---
 
-| 技能包 | 上传包（v0.3.0） | 状态 |
+## 六、让自己的智能体被基座发现
+
+| 方式 | 适用 | 用法 |
 |---|---|---|
-| `pasm-npc`             | `pasm-npc-0.3.0.zip`（4.4 KB） | 待发布 |
-| `pasm-companion`       | `pasm-companion-0.3.0.zip`（5.2 KB） | 待发布 |
-| `pasm-tutor`           | `pasm-tutor-0.3.0.zip`（4.5 KB） | 待发布 |
-| `pasm-longterm-verify` | `pasm-longterm-verify-0.3.0.zip`（5.2 KB） | 已验证层，已提交技能平台审核 / 已发布到 ClawHub（v0.2.1） |
+| `PASM_SKILLS_PATH` | 本地开发最快 | 指向一个 `.py` 文件或目录 |
+| `PASM_SKILLS_AGENT_MODULES` | 显式钉死模块 | 逗号分隔的模块名 |
+| **entry points**（推荐） | 装成包后自动发现 | `[project.entry-points."pasm_skills.agents"]` |
 
-源码双端同步：GitHub `arronJack/pasm-skills` + Gitee `arronzheng/pasm-skills`。
+```toml
+[project.entry-points."pasm_skills.agents"]
+my-agents = "my_pkg.agents"
+```
 
-各平台的登录方式、审核流程与更新步骤记在**仓库外**的本机发布指南里，
-不随公开仓分发（避免把个人操作细节和平台专名混进项目文档）。
+三种都失败也不会报错 —— 基座照样能 `selftest` / `list`，只是智能体数为 0。
+**基座不依赖任何智能体。**
 
-## 六、本机配置（可选）
+---
 
-本机上"带 torch 的那个解释器"往往在仓库外，所以配置也放**仓库外**（而不是写死在代码里）。
+## 七、安装
+
+```bash
+pip install pasm-skills        # 基座（零依赖，stdlib only）
+pip install -e .               # 开发模式
+pip install pasm-agents        # 想要现成智能体（依赖本基座）
+```
+
+## 八、本机配置（可选）
+
+本机"带 torch 的那个解释器"往往在仓库外，所以配置也放**仓库外**。
 在 `~/.pasm-skills/local.json` 写：
 
 ```json
 { "python": ["/path/to/python-with-torch", "%%HOME%%/venv/bin/python"] }
 ```
 
-（`%%HOME%%` 是占位符，省得写死用户名；也支持 `PASM_LOCAL_CONF` 环境变量指定别的路径，
-以及仓库根的 `pasm-skills.local.json` —— 后者已进 `.gitignore`。）
+（`%%HOME%%` 是占位符；也支持 `PASM_LOCAL_CONF` 指定别的路径。）
 
-- 找得到 → 领域场景跑 `bionic` / `core` 档（真实情绪模块 + 人格 + 学习层）
-- 找不到 → 自动降级 `light`，并在**每条结论**里标注档位，绝不假装覆盖了
+- 找得到 → 场景跑 `bionic` / `core` 档；找不到 → 自动降级 `light` 并**在每条结论里标注**
+- 建议指向**自带 site-packages 的 venv**：若环境改写了 `APPDATA`，Python 的 user site
+  packages 会指向别处，装在 user site 的 torch 就会"时有时无"
 
 优先级：`PASM_TORCH_PYTHON` → `PASM_PYTHON` → 本机配置 → 当前解释器 → 仓库内 venv → `PATH`。
 
-> 建议指向一个**自带 site-packages 的 venv**，别用系统 Python：
-> 若环境里 `APPDATA` 被改写，Python 的 user site-packages 会指向别处，
-> 装在 user site 里的 torch 就会"时有时无"（本项目真踩过，表现为 core-verifier 突然报
-> `No module named 'torch'`）。
+## 九、许可证
 
-**公开仓里不留任何个人机器路径** —— 这也是回归基线只记 Python 版本号、不记路径的原因。
-
-## 七、许可证
-
-MIT。
+MIT。技能包在部分平台需按平台要求标 `MIT-0`（比 MIT 更宽松，允许无署名使用）——
+本仓的 `tools/build_skill.py` 里对两种形态分别处理，详见 `docs/SKILL-FORMAT.md`。

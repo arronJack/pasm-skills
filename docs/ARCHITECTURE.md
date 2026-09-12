@@ -1,12 +1,37 @@
 # 架构说明（ARCHITECTURE）
 
-## 一、分层
+> 本仓是**基座**：提供写/跑智能体的能力，不含任何具体智能体。
+> 具体智能体在独立公开仓 `pasm-agents`（通过 entry points 被本基座发现）。
+
+## 〇、基座对外提供什么
+
+```
+pasm_skills/
+├── sdk/          BaseAgent —— 写产品智能体的底座（记忆/情绪/动作/反馈/持久化）
+├── agent.py      Agent 基类 / AgentResult / Finding / 注册表
+├── discovery.py  把外部智能体接进来（entry points / 环境变量）
+├── context.py    RepoContext —— 仓隔离探测
+├── scenarios.py  场景仿真底座（解释器择优 / PRELUDE / 阈值判定）
+├── checks.py     核心契约检查工具箱
+├── build.py      技能包打包库（两种归档形态）
+└── cli.py        pasm-skills 命令行
+```
+
+**两条独立的扩展轴**（互不依赖）：
+
+| | 产品智能体 | 验证智能体 |
+|---|---|---|
+| 基类 | `pasm_skills.sdk.BaseAgent` | `pasm_skills.agent.Agent` |
+| 主要用 | `sdk` | `agent` + `context` + `scenarios` + `checks` |
+| 面向 | 使用者（陪人 / 扮演 / 教学） | 开发者（给核心做体检） |
+
+## 一、分层（以下讲的是"验证智能体"那条轴）
 
 ```
 CLI (cli.py)
-  │  list / repos / run / selftest
+  │  list / agents / repos / run / selftest
   ▼
-智能体 (agents/*.py)          ← 只负责"编排检查项 + 汇报结论"
+外部智能体（pasm-agents 仓，经 discovery.py 注册）
   │  Agent.run() → self.ok/warn/fail/skip(...)
   ├──────────────────────────────────────────────┐
   │ 守门层（结构）                                 │ 领域层（行为）
@@ -36,6 +61,7 @@ CLI (cli.py)
 | 失效类型 | 模块缺失、契约漂移、两仓分叉 | 记忆丢失、情绪漂移、行为僵化、人格饱和 |
 
 两者不互相替代：`core-verifier` 全绿**不能**保证 NPC 记得住玩家。
+具体实现见 `pasm-agents` 仓的 `pasm_agents/verifiers/`。
 
 ## 二、关键决策：为什么探测要开子进程
 

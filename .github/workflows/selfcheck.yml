@@ -3,12 +3,14 @@ name: selfcheck
 # 公开仓里能做到的 CI 是什么，这里如实划清界限：
 #
 #   ✅ 能跑：框架自检（selftest）—— 不需要任何 PASM 仓库，纯标准库
-#   ❌ 不能跑：core-verifier / parity-guard / 领域智能体
-#              —— 它们要读 PASM 核心仓（私有）与 PASM-Lite/Studio 仓，
+#   ❌ 不能跑：任何具体智能体（core-verifier / parity-guard / 领域智能体）
+#              —— 它们住在另一个公开仓 pasm-agents，
+#                 且要读 PASM 核心仓（私有）与 PASM-Lite/Studio 仓，
 #                 公开 runner 上既没有这些仓库，也不该把私有源码拉进来。
 #
-# 所以完整验证仍然跑在本地或自托管环境（见 README「长期验证怎么落地」）。
-# 这个工作流的价值是：**保证框架本身没坏**，让任何一次改动都别把 CLI 或注册表改崩。
+# 所以完整验证仍然跑在本地或自托管环境（见 README）。
+# 这个工作流的价值是：**保证基座本身没坏**，让任何一次改动都别把 SDK、
+# 注册表、发现机制或 CLI 改崩。
 
 on:
   push:

@@ -2,6 +2,77 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] — 2026-09-12
+
+### 变更（破坏性）—— 本仓转为**纯基座**
+
+v0.3.0 的本仓既当"框架"又当"成品智能体仓库"，定位混了：既想被人 `pip install` 当工具用，
+又塞着三个面向使用者的智能体。这一版把两者拆开：
+
+| | 现在在哪 | 内容 |
+|---|---|---|
+| **基座**（本仓 `pasm-skills`） | 这里 | SDK + 框架 + 场景仿真 + 打包工具 + 脚手架 + 文档 |
+| **成品智能体**（新公开仓 `pasm-agents`） | 独立仓 | 3 个产品智能体 + 7 个验证智能体 + 4 个技能包 |
+
+**移动清单**：
+
+- `pasm_agents/{npc,companion,tutor,cli}.py` → `pasm-agents` 仓
+- `pasm_agents/base.py` → **`pasm_skills/sdk/base.py`**（这是基座的核心，留在本仓）
+- `pasm_skills/agents/*`（7 个验证智能体）→ `pasm-agents` 仓的 `pasm_agents/verifiers/`
+- `skill/SKILL.{npc,companion,tutor,verify}.body.md` → `pasm-agents` 仓
+- `baselines/`、`examples/*`、`docs/AGENTS.md` → `pasm-agents` 仓
+
+**对你的影响**：
+
+- `pip install pasm-skills` 仍然可用，但**不再自带任何智能体**；
+  `from pasm_agents import NpcAgent` 请改 `pip install pasm-agents`。
+- 本仓的 CLI 从 `pasm_skills` 改成 **`pasm-skills`**（原来那个名字与包名重复、还容易和智能体 CLR 混）。
+
+### 新增 —— SDK 正式独立成层
+
+- **`pasm_skills.sdk`**：`BaseAgent` 从"某个具体包里的实现细节"提升为**公开 SDK**。
+  写智能体的人只需要实现两个钩子（`action_pool()` / `_render_reply()`），
+  记忆淘汰 / 情绪 / 动作采样 / 反馈塑形 / 落盘全由 SDK 承担。
+- `selftest` 扩到 **15 项**，新增 SDK 全链路自检：建 → 记忆 → 选动作 → 对话 → 反馈 →
+  落盘（**不依赖任何 PASM 仓、也不依赖任何具体智能体**）。
+
+### 新增 —— 智能体发现机制（基座不内置智能体）
+
+`pasm_skills/discovery.py`，按优先级三道：
+
+1. `PASM_SKILLS_PATH`（本地开发：指向文件或目录）
+2. `PASM_SKILLS_AGENT_MODULES`（显式钉死模块名）
+3. **entry points**（组名 `pasm_skills.agents`；装成包后自动发现）
+
+三道都失败也**不报错** —— 基座照样能 `selftest` / `list`，只是智能体数为 0。
+新增 `pasm-skills agents` 子命令：打印每个智能体是从哪加载进来的（排障用）。
+
+### 新增 —— 打包能力提升为库
+
+- `tools/build_skill.py` 里的规则下沉到 **`pasm_skills/build.py`**（`ProjectMeta` /
+  `SkillSpec` / `build_all` / `run_cli`）。各智能体仓只需声明"我有哪些技能"，
+  归档规则（含那个踩过坑的 ZIP 结构自检）集中一处，不再各抄一份。
+- `author` / `homepage` / `repository` / `requires` 全部参数化（原来写死在本仓）。
+
+### 新增 —— 脚手架与文档（"别人下载了能做出自己的智能体"）
+
+- `templates/agent_template.py`：智能体骨架，复制即用，自带冒烟
+- `templates/SKILL.template.body.md`：技能正文模板（含"已知短板"这类必填节的提醒）
+- `examples/build_your_agent.py`：8 个环节的完整走查（含反馈塑形的实测对比）
+- **`docs/BUILD-AGENT.md`**：手把手从零到发版（含检查清单）
+- **`docs/SKILL-FORMAT.md`**：技能包格式、两种归档形态、frontmatter 逐字段说明
+- 本仓自己的技能：`pasm-agent-authoring`（教人怎么写智能体 + 打技能包）
+
+### 修复
+
+- `sdk/base.py` 里 `_fallback_weights()` 的注释提到"子类可扩展 `ACT_BIAS`"——
+  **这个属性根本不存在**，照它写会静默失败。已改为如实说明：要么动作名带关键词，
+  要么覆盖整个方法。
+
+验证：`python -m pasm_skills selftest` → 15/15 通过；
+`python examples/build_your_agent.py` 与 `python templates/agent_template.py` 全跑通；
+`python tools/build_skill.py --zip --clean` 产出 `pasm-agent-authoring-0.4.0.zip`（内含且仅含 `SKILL.md`）。
+
 ## [0.3.0] — 2026-09-12
 
 ### 新增 —— 产品层 `pasm_agents`（本仓的主交付物）
