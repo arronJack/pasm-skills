@@ -13,6 +13,7 @@
 
 | | 是什么 | 入口 |
 |---|---|---|
+| **📖 使用教程** | 从"这是干什么的"到"写出并发布一个智能体"，走一遍 | **[`docs/TUTORIAL.md`](docs/TUTORIAL.md)** |
 | **SDK** | `BaseAgent` —— 记忆 / 情绪 / 动作 / 反馈 / 持久化开箱可用 | `from pasm_skills.sdk import BaseAgent` |
 | **框架** | 智能体基类与注册表、仓隔离探测、场景仿真底座、核心契约检查工具箱 | `from pasm_skills.agent import Agent, register` |
 | **打包** | 把智能体打成平台可直接上传的技能包（两种归档形态） | `from pasm_skills.build import SkillSpec, run_cli` |
@@ -111,6 +112,7 @@ pasm-skills/
 │   └── build_skill.py           声明本仓技能 → 调用 pasm_skills.build
 │
 └── docs/
+    ├── TUTORIAL.md              ★ 使用教程（先读这个）
     ├── BUILD-AGENT.md           ★ 手把手：从零做一个智能体
     ├── SKILL-FORMAT.md          ★ 技能包格式与两种归档形态
     ├── ARCHITECTURE.md          框架分层与设计取舍
