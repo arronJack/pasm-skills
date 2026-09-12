@@ -3,16 +3,25 @@
 为什么要一个脚本
 ----------------
 WorkBuddy 开放平台与 ClawHub 的 frontmatter 要求**不一样**，
-但正文是同一份。手抄两份必然漂移，所以：
+而且**归档结构也不一样**，但正文是同一份。手抄必然漂移，所以：
 
     skill/SKILL.body.md      ← 唯一正文（人工维护）
         │
-        ├─ 拼 WorkBuddy frontmatter → dist/workbuddy/skills/<name>/SKILL.md
+        ├─ 拼 WorkBuddy frontmatter → dist/workbuddy/SKILL.md
         └─ 拼 ClawHub frontmatter   → dist/clawhub/<name>/SKILL.md
+
+归档结构（**实测踩坑，别改**）
+-----------------------------
+WorkBuddy 开放平台要求 **`SKILL.md` 直接躺在 ZIP 根目录**。
+包成 `skills/<name>/SKILL.md` 会被平台拒收，报「压缩包缺少 SKILL.md 文件」——
+平台只认根目录，不递归找。（2026-09-12 实测，v0.2.1 首次提交时踩到。）
+
+ClawHub 反过来，要的是**以 slug 命名的目录**，目录里放 SKILL.md。
 
 用法：
     python tools/build_skill.py                 # 只生成目录
     python tools/build_skill.py --zip           # 顺带打 ZIP（WorkBuddy 上传用）
+    python tools/build_skill.py --zip --clean   # 先把旧产物挪到 _stale/
 
 版本号取自 `pyproject.toml`，两边永远一致。
 """
@@ -144,8 +153,11 @@ def build(do_zip: bool) -> int:
     # 正文里的版本占位（若有）也一并替换
     body = body.replace("{{VERSION}}", version)
 
+    # 目录结构本身就是"平台要什么"，别为了好看再套一层：
+    #   WorkBuddy → SKILL.md 直接在根（ZIP 直接打这个目录就是对的）
+    #   ClawHub   → <slug>/SKILL.md
     targets = {
-        "workbuddy": DIST / "workbuddy" / "skills" / NAME / "SKILL.md",
+        "workbuddy": DIST / "workbuddy" / "SKILL.md",
         "clawhub": DIST / "clawhub" / NAME / "SKILL.md",
     }
     for platform, path in targets.items():
@@ -156,7 +168,7 @@ def build(do_zip: bool) -> int:
 
     if do_zip:
         zip_path = DIST / ("%s-%s.zip" % (NAME, version))
-        root = DIST / "workbuddy"          # ZIP 内为 skills/<name>/SKILL.md
+        root = DIST / "workbuddy"          # 根目录直接是 SKILL.md
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for f in sorted(root.rglob("*")):
                 if f.is_file():
@@ -164,11 +176,19 @@ def build(do_zip: bool) -> int:
         size = zip_path.stat().st_size
         print("[OK]   zip        -> %s（%.1f KB，上限 3MB）"
               % (zip_path, size / 1024.0))
+
+        # 结构自检：WorkBuddy 只认根目录的 SKILL.md，不递归找。
+        # 少了这步，包能用但会被平台一句"缺少 SKILL.md 文件"拒掉，很难查。
+        with zipfile.ZipFile(zip_path) as zf:
+            names = zf.namelist()
+        print("       zip 内容：%s" % ", ".join(names))
+        if names != ["SKILL.md"]:
+            print("[FAIL] ZIP 内必须是且仅是根目录的 SKILL.md，当前：%s" % names,
+                  file=sys.stderr)
+            return 1
         if size > 3 * 1024 * 1024:
             print("[FAIL] ZIP 超过 3MB —— WorkBuddy 开放平台会拒收", file=sys.stderr)
             return 1
-        with zipfile.ZipFile(zip_path) as zf:
-            print("       zip 内容：%s" % ", ".join(zf.namelist()))
     return 0
 
 

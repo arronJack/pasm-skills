@@ -4,62 +4,90 @@
 
 ```
 pasm-skills-dist/
-├─ workbuddy/skills/pasm-longterm-verify/SKILL.md    # WorkBuddy 开放平台
-├─ clawhub/pasm-longterm-verify/SKILL.md             # ClawHub（qclaw 技能市场）
-└─ pasm-longterm-verify-0.2.1.zip                    # ≤3MB，WorkBuddy 上传用
+├─ workbuddy/SKILL.md                        # WorkBuddy：SKILL.md 必须在根，ZIP 直接打这个目录
+├─ clawhub/pasm-longterm-verify/SKILL.md     # ClawHub：要 slug 目录，目录里放 SKILL.md
+└─ pasm-longterm-verify-0.2.1.zip            # ≤3MB，WorkBuddy 上传用（内含且仅含 SKILL.md）
 ```
+
+**两份包的归档结构必须不同**，这是两个平台的硬要求，别为了统一而统一：
+
+| 平台 | 期望结构 | 放错了会怎样 |
+|---|---|---|
+| WorkBuddy | ZIP **根目录**直接是 `SKILL.md` | 报「压缩包缺少 SKILL.md 文件」——它不递归找 |
+| ClawHub | `<slug>/SKILL.md`（一层目录） | 识别不到技能名 |
 
 生成/更新（版本号自动取自 `pyproject.toml`，两边永不漂移）：
 
 ```bash
-python tools/build_skill.py --zip
+python tools/build_skill.py --zip           # 增量覆盖
+python tools/build_skill.py --zip --clean   # 先把旧产物挪到 _stale/ 再重建（换结构后用这个）
 ```
+
+脚本内置结构自检：ZIP 内容不等于 `['SKILL.md']` 会直接 `[FAIL]` 退出。
 
 ---
 
 ## 平台总览
 
-| 平台 | 入口 | 能自动化的部分 | 需要人工的部分 |
-|---|---|---|---|
-| **GitHub** | github.com/arronJack/pasm-skills | ✅ 全部（git push） | 无 |
-| **Gitee** | gitee.com/arronzheng/pasm-skills | ✅ 全部（git push） | 无 |
-| **本机 WorkBuddy** | `~/.workbuddy/skills/` | ✅ 全部（拷 SKILL.md） | 无 |
-| **WorkBuddy 开放平台** | <https://open.workbuddy.cn/> | ❌ 无法 API 上传 | **开发者入驻认证 + 后台上传 + 人工审核** |
-| **ClawHub** | <https://clawhub.ai/import> | ⚠️ 有 CLI，但需 token | **获取 token / 登录** |
-
-> 为什么前两个平台不能全自动：它们都要求**账号身份与开发者资质**，
-> 上传动作绑定在已登录的网页会话或 CLI token 上。这部分必须由账号持有人操作。
+| 平台 | 入口 | 状态 | 能自动化的部分 | 需要人工的部分 |
+|---|---|---|---|---|
+| **GitHub** | github.com/arronJack/pasm-skills | ✅ 已发布 | 全部（git push） | 无 |
+| **Gitee** | gitee.com/arronzheng/pasm-skills | ✅ 已发布 | 全部（git push） | 无 |
+| **本机 WorkBuddy** | `~/.workbuddy/skills/` | ✅ 已安装 | 全部（拷 SKILL.md） | 无 |
+| **WorkBuddy 开放平台** | <https://open.workbuddy.cn/> | ✅ **已提交审核** | 除登录外的全部（浏览器自动化） | 仅微信扫码登录 |
+| **ClawHub** | <https://clawhub.ai/import> | ⏸ 待决策 | 有 CLI | **登录 + 是否接受 MIT-0** |
 
 ---
 
 ## A. WorkBuddy 开放平台
 
+### 实测记录（2026-09-12）
+
+| 项 | 值 |
+|---|---|
+| 技能 ID | `os_0168b1aad6a492b8` |
+| 市场展示名称 | PASM 长期验证智能体 |
+| 市场展示分类 | 开发工具 |
+| 服务类目 | 工具 - 办公 |
+| 版本 | v0.2.1 |
+| 状态 | **审核中**（平台提示：预计 7 个工作日内出结果） |
+| 上传包 | `pasm-longterm-verify-0.2.1.zip`（5.2 KB） |
+
+审核结果通过站内**通知**告知；通过后回技能列表点 **发布**，可见范围选 **公开发布**。
+审核期间列表上有 **撤回** 按钮，可主动撤回重新提交。
+
 ### 包已满足的要求
 
 | 要求 | 状态 |
 |---|---|
-| ZIP ≤ 3MB | ✅ 约 5.3 KB |
-| 目录结构 `skills/{skill-name}/SKILL.md`（最多 2 层） | ✅ 无多余层级 |
-| 技能名规范 | ✅ `pasm-longterm-verify` |
+| ZIP ≤ 3MB | ✅ 约 5.2 KB |
+| **ZIP 根目录直接是 `SKILL.md`** | ✅ 无中间层级（`skills/`、`{name}/` 都不要） |
+| 技能名规范（小写 + 短横线） | ✅ `pasm-longterm-verify` |
 | frontmatter 必填 `description` / `description_zh` / `description_en` / `version` / `author` | ✅ 全部具备 |
 | `name` / `display_name` / `display_name_en` / `license` / `homepage` | ✅ 附带 |
 | `requires.bins` / `requires.python` | ✅ `[python3, git]` / `>=3.10` |
 
-### 操作步骤
+> 平台会自动解析 frontmatter 生成「市场展示名称 / 介绍 / 版本号」，并给一个首字母默认头像。
+> 需要人工补的只有两项：**市场展示分类**（多选）和**服务类目**（一级 + 二级，至少 1 个）。
+> 「试试这样问我」示例问句当前为空 —— 平台从包内某个字段读，本仓 SKILL.md 未提供。
 
-1. 打开 <https://open.workbuddy.cn/>，用开发者账号登录；
-2. 若未入驻：先完成**开发者认证**（个人/企业资料审核）；
-3. 进入左侧 **发布管理 → 技能 → 创建**；
-4. 上传 ZIP：`pasm-skills-dist/pasm-longterm-verify-0.2.1.zip`；
-5. 核对自动解析出的信息（名称/版本/描述/触发词），必要时微调；
-6. **提交审核**（实测约 18 小时）；
-7. 审核通过后回到列表，点 **发布**，可见范围选 **公开发布**。
+### 操作步骤（浏览器自动化实走一遍的版本）
+
+1. 打开 <https://open.workbuddy.cn/>，微信扫码登录（**这一步必须本人做**，其余可自动）；
+2. 左侧 **发布管理 → 技能 → 创建**；
+3. 上传 ZIP：`pasm-skills-dist/pasm-longterm-verify-0.2.1.zip`；
+4. 解析通过后页面显示「类型：技能 / 技能ID：`os_…`」，点 **继续**；
+5. 第 2 步「确认信息」补两个必填项：
+   - **市场展示分类** → 选 `开发工具`（可多选，多余的标签点 × 删掉）；
+   - **服务类目** → 一级选 `工具`，二级选 `办公`；
+6. 点 **继续** → 第 3 步核对全部信息 → 点 **提交**；
+7. 提示「已提交审核，预计 7 个工作日内出结果」。
 
 ### 上传前自检
 
 ```bash
 python -c "import zipfile;z=zipfile.ZipFile('E:/AI/pasm-skills-dist/pasm-longterm-verify-0.2.1.zip');print(z.namelist())"
-# 期望：['skills/pasm-longterm-verify/SKILL.md']
+# 期望：['SKILL.md']      ← 不是 ['skills/pasm-longterm-verify/SKILL.md']
 ```
 
 ---
@@ -69,6 +97,9 @@ python -c "import zipfile;z=zipfile.ZipFile('E:/AI/pasm-skills-dist/pasm-longter
 ⚠️ **ClawHub 强制 MIT-0 许可证**。本仓源码是 MIT，发布到 ClawHub 的那份包
 按平台要求标注 `license: MIT-0`（比 MIT 更宽松，允许无署名使用）。
 若不想以 MIT-0 发布，就不要走 ClawHub，只走 WorkBuddy + GitHub + Gitee。
+
+`clawhub/pasm-longterm-verify/SKILL.md` 里的 `license` 已经写成 `MIT-0`，
+是**故意与源码仓不一致**的 —— 发布前请确认接受这一点。
 
 ### 方式 1：CLI（推荐，可版本化）
 
@@ -114,7 +145,7 @@ ClawHub 支持按 GitHub 仓库导入，但要求：仓库**公开**、**非 for
 ```bash
 # 安装（已执行过一次）
 mkdir -p ~/.workbuddy/skills/pasm-longterm-verify
-cp pasm-skills-dist/workbuddy/skills/pasm-longterm-verify/SKILL.md \
+cp pasm-skills-dist/workbuddy/SKILL.md \
    ~/.workbuddy/skills/pasm-longterm-verify/SKILL.md
 ```
 
@@ -136,8 +167,19 @@ python tools/build_skill.py --zip
 # 4) ClawHub：重跑 publish，version 用新号
 ```
 
-`tools/build_skill.py` 里 `ind()` 对中文**不折行** —— 因为 YAML 的 `>-`
-会把换行折叠成空格，中文被折开后会多出突兀的空格。这是踩过的坑，别改回去。
+---
+
+## E. 踩过的坑（都已在工具链里固化）
+
+| 坑 | 现象 | 处理 |
+|---|---|---|
+| **ZIP 结构放错** | 传 `skills/<name>/SKILL.md` → 平台报「压缩包缺少 SKILL.md 文件」 | 平台只认**根目录**的 SKILL.md，不递归。`build_skill.py` 已改为根目录输出 + 结构自检 |
+| **上传后 DOM 被重建** | 再对该页面 `upload` 会报 `Element not found`（`input[type=file]` 被 React 移除了） | 先 `open` 同一 URL 重新加载页面，再 `upload` |
+| **元素 ref 会失效** | 用快照里的 `@e12` 点击，点到了别的链接（跳去 ClawHub） | 每次操作前重新快照；或直接用 `eval` 按文本查元素再点 |
+| **自定义下拉不响应 `eval` 的 `.click()`** | 派发 `click` 事件后下拉纹丝不动（组件监听的是 pointer 事件） | 改用真实鼠标：`mouse move <x> <y>` → `mouse down` → `mouse up`；坐标用 `getBoundingClientRect()` 取，**不要**照截图估 |
+| **截图坐标 ≠ 视口坐标** | 截图 1080 宽、视口 1867 宽，按截图估的坐标全偏 | 一律 `eval` 取 `getBoundingClientRect()`，或先读 `innerWidth` 算缩放 |
+| **中文乱码** | PowerShell 输出 `寮€鍙戝钩鍙?` | 命令前加 `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` |
+| **`ind()` 折行** | YAML `>-` 折叠时中文句子中间多出空格 | 中文描述整体输出一行不折行，别改回去 |
 
 ---
 
