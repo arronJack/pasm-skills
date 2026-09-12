@@ -218,5 +218,5 @@ class StudyTutorAgent(Agent):
                     ", ".join("%s=%s" % (k, v) for k, v in list(m["profile"].items())[:6]))
         S.judge(self, m, SPEC, tier=tier)
 
-        self.extra.update({"metrics": m, "python": python, "torch": torch_ok})
+        self.extra.update({"metrics": m, "python": S.python_label(python), "torch": torch_ok})
         return None

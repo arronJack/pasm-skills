@@ -256,6 +256,25 @@ def candidate_pythons() -> List[str]:
     return res
 
 
+def python_label(python: str, timeout: int = 30) -> str:
+    """解释器的**可移植描述**（`Python x.y.z`），不含个人机器路径。
+
+    归档报告是会入库、会贴出去的产物。往里塞一个 `C:\\Users\\...` 的绝对路径
+    既泄露信息、对别人也毫无参考价值 —— 档位比对只需要"版本 + torch"。
+    （与 `regression` 的基线口径保持一致。）
+    """
+    code = "import sys;print('.'.join(map(str,sys.version_info[:3])))"
+    try:
+        proc = subprocess.run([python, "-c", code], capture_output=True,
+                              text=True, timeout=timeout)
+        if proc.returncode == 0 and proc.stdout.strip():
+            return "Python %s" % proc.stdout.strip()
+    except Exception:                                  # noqa: BLE001
+        pass
+    # 连版本都问不出来时，退到文件名（仍然不带目录）
+    return os.path.basename(str(python).replace("\\", "/")) or str(python)
+
+
 def choose_python(ctx: Any = None, prefer_torch: bool = True,
                   timeout: int = 90) -> Tuple[str, bool]:
     """挑一个最合适的解释器。

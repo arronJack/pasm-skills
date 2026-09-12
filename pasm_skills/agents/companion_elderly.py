@@ -212,7 +212,7 @@ class CompanionElderlyAgent(Agent):
                                                    m.get("in_store"), m.get("cap")))
         S.judge(self, m, SPEC, tier=tier)
 
-        self.extra.update({"metrics": m, "python": python, "torch": torch_ok})
+        self.extra.update({"metrics": m, "python": S.python_label(python), "torch": torch_ok})
         return None
 
 
