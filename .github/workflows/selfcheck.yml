@@ -1,0 +1,47 @@
+name: selfcheck
+
+# 公开仓里能做到的 CI 是什么，这里如实划清界限：
+#
+#   ✅ 能跑：框架自检（selftest）—— 不需要任何 PASM 仓库，纯标准库
+#   ❌ 不能跑：core-verifier / parity-guard / 领域智能体
+#              —— 它们要读 PASM 核心仓（私有）与 PASM-Lite/Studio 仓，
+#                 公开 runner 上既没有这些仓库，也不该把私有源码拉进来。
+#
+# 所以完整验证仍然跑在本地或自托管环境（见 README「长期验证怎么落地」）。
+# 这个工作流的价值是：**保证框架本身没坏**，让任何一次改动都别把 CLI 或注册表改崩。
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # 每周一 00:00 UTC 跑一次，防止依赖/环境漂移被长期掩盖
+    - cron: "0 0 * * 1"
+
+jobs:
+  selfcheck:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 零依赖自检（不需要任何 PASM 仓）
+        run: python -m pasm_skills selftest
+
+      - name: CLI 可用性
+        run: |
+          python -m pasm_skills --version
+          python -m pasm_skills list
+          python -m pasm_skills repos
+
+      - name: 语法编译检查
+        run: python -m compileall -q pasm_skills

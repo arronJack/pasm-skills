@@ -13,13 +13,14 @@
 """
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.1"
 
 from .agent import (  # noqa: F401
     AGENTS, FAIL, HOOKS, OK, SKIP, WARN,
     Agent, AgentResult, Finding,
     agent, catalog, names, register, run_agent,
 )
+from . import scenarios  # noqa: F401  领域场景仿真底座（PRELUDE / 解释器择优 / 指标判定）
 from .context import REPO_SPEC, RepoContext  # noqa: F401
 
 __all__ = [
@@ -27,7 +28,7 @@ __all__ = [
     "Agent", "AgentResult", "Finding", "AGENTS", "HOOKS",
     "OK", "WARN", "FAIL", "SKIP",
     "agent", "catalog", "names", "register", "run_agent",
-    "RepoContext", "REPO_SPEC",
+    "RepoContext", "REPO_SPEC", "scenarios",
 ]
 
 

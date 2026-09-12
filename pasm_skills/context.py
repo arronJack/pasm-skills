@@ -127,8 +127,29 @@ class RepoContext:
 
     # ------------------------------------------------------------ 探测
     def python(self) -> str:
-        """用于探测的解释器：PASM_PYTHON 优先，否则当前解释器。"""
-        return os.environ.get("PASM_PYTHON") or sys.executable
+        """用于探测的解释器。
+
+        `PASM_PYTHON` 优先；否则沿用与领域场景**完全同一套**择优逻辑
+        （`scenarios.choose_python`，优先带 torch 的解释器）。
+
+        为什么要统一：同一份基线，用带 torch 的解释器采集（PASM-Lite 的
+        具体引擎会注册）和用不带 torch 的采集（拿不到），结果天然不同。
+        两边不统一，就会把"换了解释器"误报成"能力消失"。
+        """
+        explicit = os.environ.get("PASM_PYTHON")
+        if explicit:
+            return explicit
+        cached = getattr(self, "_py_cache", None)
+        if cached:
+            return cached
+        py = sys.executable
+        try:
+            from .scenarios import choose_python
+            py = choose_python(self, prefer_torch=True)[0]
+        except Exception:                              # noqa: BLE001
+            py = sys.executable
+        self._py_cache = py
+        return py
 
     def probe(self, repo_key: str, code: str, timeout: int = 90,
               extra_path: Optional[List[str]] = None,

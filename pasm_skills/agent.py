@@ -115,6 +115,9 @@ class Agent:
         self.ctx = ctx
         self.options = options or {}
         self._findings: List[Finding] = []
+        #: 场景产出的原始数据（指标字典等）。会在 execute() 里并进 AgentResult.extra，
+        #: 存进 JSON 后可供前后两次运行对比——"长期验证"要的就是可比性。
+        self.extra: Dict[str, Any] = {}
 
     # ---- 结论收集 ----
     def add(self, level: str, title: str, detail: str = "") -> None:
@@ -149,6 +152,10 @@ class Agent:
                 result.elapsed = time.perf_counter() - t0
                 if self._findings:
                     result.findings = self._findings + list(result.findings)
+                if self.extra:
+                    merged = dict(self.extra)
+                    merged.update(result.extra or {})
+                    result.extra = merged
                 return result
             if result is None:
                 result = AgentResult(agent=self.name, ok=True)
@@ -162,6 +169,10 @@ class Agent:
         result.elapsed = time.perf_counter() - t0
         if self._findings:
             result.findings = self._findings + list(result.findings)
+        if self.extra:
+            merged = dict(self.extra)
+            merged.update(result.extra or {})
+            result.extra = merged
         result.error = error
         result.ok = bool(result.ok) and not error and result.worst() != FAIL
         return result

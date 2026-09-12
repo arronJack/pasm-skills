@@ -1,0 +1,15 @@
+# 统一换行：本仓在 Windows / macOS / Linux 三处都会被 clone，
+# 不锁定的话每次都会有整文件的 CRLF 噪音差异（PASM 系列仓踩过这个坑）。
+* text=auto eol=lf
+
+*.py   text eol=lf
+*.md   text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# 二进制不碰
+*.exe  binary
+*.png  binary
+*.ico  binary

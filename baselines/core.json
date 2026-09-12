@@ -1,14 +1,14 @@
 {
-  "collected_at": "2026-09-12 13:22:42",
+  "collected_at": "2026-09-12 14:43:36",
   "core": {
     "cognitive": {
       "__init__.py": "389fc42e27f63879",
       "agent_team.py": "517e63b217faee63",
       "coder.py": "de0546cc70c67b3c",
       "cog.py": "d0f0e4366c5db3aa",
-      "learning.py": "8bfae952c6507ca6",
+      "learning.py": "4e0e7e7163d30138",
       "mathlab.py": "ac034da5ffe65f0b",
-      "memory_layers.py": "8424f0829e1775bf",
+      "memory_layers.py": "b61d1cc8bd6afeeb",
       "memrouter.py": "135269e62ffb101e",
       "memvec.py": "09a90ab13b1fc164",
       "percept.py": "898e7f488fd05be5",
@@ -27,7 +27,10 @@
       "pasm",
       "pasm-light"
     ],
-    "errors": []
+    "engines_error": null,
+    "errors": [],
+    "python": "C:\\Users\\xiaozhi\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\python.exe",
+    "torch": true
   },
   "lite": {
     "files": {
@@ -38,10 +41,13 @@
       "envs.py": "5652f844fa98a6f8",
       "verify_swap.py": "61baeb7537eae4b7"
     },
-    "errors": [],
     "engines": [
       "pasm",
       "pasm-light"
-    ]
+    ],
+    "engines_error": null,
+    "errors": [],
+    "python": "C:\\Users\\xiaozhi\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\python.exe",
+    "torch": true
   }
 }

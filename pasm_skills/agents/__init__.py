@@ -5,6 +5,9 @@
 """
 from __future__ import annotations
 
-from . import core_verifier, parity_guard, regression   # noqa: F401
+from . import core_verifier, parity_guard, regression    # noqa: F401
+# 领域智能体：把"长期验证"从结构层推进到行为层
+from . import npc_lifelong, companion_elderly, study_tutor, soak_longrun   # noqa: F401
 
-__all__ = ["core_verifier", "parity_guard", "regression"]
+__all__ = ["core_verifier", "parity_guard", "regression",
+           "npc_lifelong", "companion_elderly", "study_tutor", "soak_longrun"]

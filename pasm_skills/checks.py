@@ -555,6 +555,64 @@ def check_env_plugins(agent) -> None:
                    "当前 envs 导出：%s" % attrs)
 
 
+# ---------------------------------------------------------------- 8. 安全底线
+SAFETY_CODE = r"""
+import json, os
+out = {"files": [], "hits": [], "errors": []}
+PAT = ("safety", "guard", "crisis", "risk", "moderation", "compliance", "emergency", "harm")
+for root, dirs, files in os.walk("."):
+    dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git", "build", "dist")]
+    for f in files:
+        if f.endswith(".py") and any(p in f.lower() for p in PAT):
+            out["files"].append(os.path.join(root, f).replace("\\", "/"))
+#: 只认真正的安全语义词。别放 `120` / `红线` 这种会撞上切片下标和
+#: "质量红线" 之类业务词的短串 —— 那会让这条检查永远假绿。
+KEY = ("自伤", "自杀", "危机干预", "未成年人保护", "隐私保护", "紧急联系人",
+       "急救", "安全底线", "内容安全", "敏感词")
+for root, dirs, files in os.walk("pasm"):
+    dirs[:] = [d for d in dirs if d != "__pycache__"]
+    for f in files:
+        if not f.endswith(".py"):
+            continue
+        p = os.path.join(root, f)
+        try:
+            txt = open(p, encoding="utf-8", errors="replace").read()
+        except Exception:
+            continue
+        for k in KEY:
+            if k in txt:
+                out["hits"].append("%s:%s" % (p.replace("\\", "/"), k))
+print(SENTINEL + json.dumps(out, ensure_ascii=False))
+"""
+
+#: 智能体/陪伴类应用必须覆盖的红线场景（认知引擎若不做，应用层必须做）
+SAFETY_REDLINES = ("自伤/自杀风险识别", "医疗急救升级", "未成年人保护",
+                   "隐私不外泄", "越权操作拦截")
+
+
+def check_safety_readiness(agent) -> None:
+    """安全底线：核心是否已落盘安全语义层。
+
+    认知引擎本身可以不做安全过滤（那是应用层的活），但**必须有人说清谁来做**。
+    这里只报事实，不替产品做决定。
+    """
+    data = _j(agent.ctx.probe("core", SAFETY_CODE, timeout=90))
+    if data is None:
+        agent.fail("安全底线探测失败")
+        return
+    files = data.get("files") or []
+    hits = data.get("hits") or []
+    if files:
+        agent.ok("核心已落盘安全相关模块", "命中：%s" % ", ".join(files[:4]))
+    elif hits:
+        agent.ok("核心已出现安全语义线索", "命中 %d 处，如 %s" % (len(hits), hits[0]))
+    else:
+        agent.warn("核心侧尚无安全底线层",
+                   "陪伴/NPC/教学场景需要覆盖：%s。"
+                   "若由应用层（如 PASM Studio）承担，请在那侧确认并写入文档"
+                   % "、".join(SAFETY_REDLINES))
+
+
 # ---------------------------------------------------------------- 汇总用
 def all_checks(agent) -> None:
     """跑一遍全部基础检查（core-verifier 的默认配方）。"""
@@ -567,5 +625,6 @@ def all_checks(agent) -> None:
     else:
         agent.skip("跨档互换验证跳过", "需要 core 与 lite 两仓同时在位")
     check_env_plugins(agent)
+    check_safety_readiness(agent)
     if agent.ctx.has("lite"):
         check_smoke(agent)

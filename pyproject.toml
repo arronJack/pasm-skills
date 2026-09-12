@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pasm-skills"
+version = "0.2.1"
+description = "PASM 智能体工坊 —— 把「对认知引擎的长期验证」做成可重复运行的智能体（零依赖、无需服务器）"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "arronzheng" }]
+keywords = ["pasm", "agent", "verification", "long-run", "memory", "emotion", "companion", "npc"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# 想要覆盖仿生层（情绪/人格/情景记忆）时，指向一个带 torch 的解释器即可：
+#   PASM_PYTHON=/path/to/venv/bin/python pasm-skills run --all
+torch = ["torch"]
+
+[project.urls]
+Homepage = "https://gitee.com/arronzheng/pasm-skills"
+Repository = "https://github.com/arronJack/pasm-skills"
+Source = "https://gitee.com/arronzheng/pasm-skills"
+Issues = "https://gitee.com/arronzheng/pasm-skills/issues"
+
+[project.scripts]
+pasm-skills = "pasm_skills.cli:main"
+
+[tool.setuptools]
+packages = ["pasm_skills", "pasm_skills.agents"]
+
+[tool.setuptools.package-data]
+pasm_skills = ["py.typed"]

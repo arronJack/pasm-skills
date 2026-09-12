@@ -91,7 +91,10 @@ def cmd_run(args) -> int:
         blob = json.dumps(payload if len(payload) > 1 else payload[0],
                           ensure_ascii=False, indent=2)
         if args.out:
-            Path(args.out).write_text(blob, encoding="utf-8")
+            out_path = Path(args.out)
+            if out_path.parent and not out_path.parent.exists():
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(blob, encoding="utf-8")
             if not args.json:
                 print("已写入：%s" % args.out)
         if args.json:
