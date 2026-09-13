@@ -51,7 +51,15 @@ python examples/build_your_agent.py
 python templates/agent_template.py        # 骨架自带的冒烟
 ```
 
-**手把手教程**：[`docs/BUILD-AGENT.md`](docs/BUILD-AGENT.md)
+想**照着一步步自己写出一个智能体**（含实现、应用、真实效果），用 `demo/` 包：
+
+```bash
+python -m demo.run_all              # 一键跑完 6 步 + 汇总应用效果
+python demo/step_01_minimal.py      # 或单步看每一环节
+```
+
+**手把手教程与分步 demo**：[`demo/README.md`](demo/README.md) ·
+[`docs/BUILD-AGENT.md`](docs/BUILD-AGENT.md)
 
 ---
 
@@ -104,6 +112,13 @@ pasm-skills/
 │
 ├── examples/                    可跑示例（不依赖任何成品智能体）
 │   └── build_your_agent.py      从零到落盘的完整走查
+│
+├── demo/                        ★ 手把手分步教程包：教你从零写一个智能体
+│   ├── README.md                分步实现 + 应用 + 真实效果（从这里开始）
+│   ├── agent.py                 完整版「学习陪伴·小墨」（可直接 import 用）
+│   ├── step_01..06_*.py         6 个独立可跑的分步教学
+│   ├── step_07_apply.py         实现后怎么接进 CLI / FastAPI / 游戏
+│   └── run_all.py               一键跑完 6 步 + 汇总应用效果
 │
 ├── skill/                       ★ 基座自己的技能正文
 │   └── SKILL.authoring.body.md  「怎么写 PASM 智能体 + 打技能包」

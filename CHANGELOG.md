@@ -2,6 +2,45 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.2] — 2026-09-13
+
+### 新增 —— `demo/` 分步教程包：手把手教人从零写一个智能体
+
+此前基座只有单文件 `examples/build_your_agent.py` 和长文档，缺一个**结构化的「分步 demo 包」**：
+照着它，新人能在 30 分钟内写出第一个会记忆 / 有情绪 / 能被反馈塑形 / 能落盘的智能体，
+并知道**写出来之后怎么接进真实产品**、看到**真实跑出来的应用效果**。
+
+`demo/` 内容（每个 step 独立可跑，文件即课时）：
+
+| 文件 | 讲什么 |
+|---|---|
+| `README.md` | 分步实现（1→6）+ 应用（CLI / FastAPI / 游戏）+ **真实效果对照表** |
+| `agent.py` | 完整版「学习陪伴·小墨」：6 步演变后的最终形态（可直接 `import` 用） |
+| `step_01_minimal.py` | 最小智能体（只写 `action_pool` + `_render_reply` 两个钩子） |
+| `step_02_memory.py` | + 记忆（重要度 `salience` 决定淘汰） |
+| `step_03_feedback.py` | + 反馈塑形（`feedback(kind, action=)`，行为被学习改变） |
+| `step_04_emotion.py` | + 情绪（`mood` 属性影响语气） |
+| `step_05_state.py` | + 结构化学情（`state.notes` + `snapshot()` 机读出口） |
+| `step_06_growth.py` | + 成长（`growth_stage` 解锁动作池） |
+| `step_07_apply.py` | 应用：真实对话 + 跨进程恢复 + 3 种集成骨架 |
+| `run_all.py` | 一键跑完 6 步 + 汇总应用效果 |
+
+设计要点（与基座契约一致，均实跑验证）：
+
+- 演示主角「小墨」复用 `BaseAgent` 全部能力，**不引入任何新 API**——教的是基座本身怎么用；
+- 反馈塑形表用 `seed=0` 可复现：`teach` 28.2% → **100%**、`peek` 23.2% → **0%**；
+  并如实说明这是 softmax 饱和（夸一个动作会让它主导），想保留多样性就分散夸多个动作；
+- `light` 档（无核心）下全部跑通，且 `tier` 如实标注——降级永不隐藏。
+
+运行：`python -m demo.run_all`（从仓根）或 `python demo/step_01_minimal.py`。
+
+### 变更
+
+- README 目录补 `demo/`，「30 秒写一个智能体」一节加 `demo` 包入口
+- 版本 0.4.2（与 `pasm-agents` 对齐到 0.4.4）
+- `demo/README.md` 新增「PASM 是什么 · 为什么用 pasm-skills · 优劣势」前置章节：
+  含三层交付关系、核心特性表、与"从零写 / 纯 LLM / 编排框架"的对比、优劣势与适用边界、一句话选型
+
 ## [0.4.1] — 2026-09-12
 
 ### 新增 —— CLI 报"未知智能体"时给自救指引（`_missing()`）
