@@ -32,12 +32,16 @@
 
 - CLI 新增 `pasm-skills cognition`（认知层自检，27 项）。
 - `packages` 纳入 `pasm_skills.cognition`。
+- **运行时版本号对齐**：`pasm_skills.__version__` 此前停在 `0.4.4`，与 `pyproject` 的
+  `0.5.0` 不一致 —— `pip show pasm-skills` 与 `import pasm_skills` 会报两个版本，
+  上游按版本判断能力是否存在时会误判。现已对齐（`0.4.3` 修过一次同样的漂移）。
 
 ### 验证
 
 - `python -m pasm_skills cognition` → **27 项通过，0 失败**（含端到端：换说法命中身份记忆、
   复习效应、巩固落盘、重启后索引恢复、零第三方依赖静态检查）。
 - `python -m pasm_skills selftest` → 通过（框架未改坏）。
+- 版本号对账：`pyproject` 0.5.0 == `pasm_skills.__version__` 0.5.0。
 
 ## [0.4.4] — 2026-09-14
 

@@ -19,3 +19,6 @@ pasm-skills.local.json
 .vscode/
 .DS_Store
 Thumbs.db
+
+# 打包过程中在本仓根目录解压出的 sdist 工作目录（构建残留，勿入库）
+pasm_skills-*/
