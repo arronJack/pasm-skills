@@ -14,7 +14,11 @@ from typing import Any, Dict, List, Optional
 # 认知皮层"必须落盘核心"的模块（v0.28.5 起）
 CORE_COGNITIVE_MODULES = ("cog", "memory_layers", "symbolic", "memrouter",
                           "memvec", "learning", "agent_team", "workctx",
-                          "coder", "selfheal", "mathlab", "percept", "quantum")
+                          "coder", "selfheal", "mathlab", "percept", "quantum",
+                          "facts", "worldmodel")
+
+#: 记忆质量基线：本套件一旦全绿，记忆层从"零覆盖"变成"可回归"
+MEMORY_QUALITY_BASELINE = 1.0
 
 #: 引擎契约的规范快照区块
 SNAPSHOT_SECTIONS = ("step", "personality", "emotion", "development",
@@ -613,12 +617,168 @@ def check_safety_readiness(agent) -> None:
                    % "、".join(SAFETY_REDLINES))
 
 
+# ------------------------------------------------- 2.5 记忆质量评测（LongMemEval 式）
+#: 为什么要有这一段：此前套件对记忆层的覆盖是**零**——根因是探测只看模块里有没有
+#: `selftest()` 可调用对象，而记忆层当时只有 `if __name__ == "__main__"` 的自检，
+#: 于是"验 A 跑 B"：套件全绿，而实际在跑的桌面那份实现零覆盖，长期分叉没人发现。
+#: 这段评测**断言行为而不是文件存在**，把记忆质量变成可回归的基线。
+MEMORY_QUALITY_CODE = r"""
+import json, os, tempfile, time
+out = {"scenarios": [], "score": 0.0, "baseline": 1.0}
+
+def case(name, ok, detail=""):
+    out["scenarios"].append({"name": name, "ok": bool(ok), "detail": str(detail)[:180]})
+
+try:
+    from pasm.cognitive import memory_layers as ML, facts as FA, worldmodel as WM
+except Exception as ex:
+    print(SENTINEL + json.dumps({"fatal": type(ex).__name__ + ": " + str(ex)}))
+    raise SystemExit(0)
+
+d = tempfile.mkdtemp(prefix="memq_")
+try:
+    ML.set_data_dir(d)
+
+    # 1) 里程碑守恒：容量触顶时高重要度经历不能被日常琐事挤掉
+    daily = [{"ts": "2026-01-01 00:00", "cat": "闲聊", "title": "日常%d" % i,
+              "brief": "闲聊。", "tags": ["闲聊"], "sal": 1, "str_": 1.0,
+              "hits": 0, "last_hit": 0.0, "imp": 0.5, "media": [],
+              "vec": None, "vk": ""} for i in range(ML._EPI_CAP + 50)]
+    ms = {"ts": "2020-01-01 00:00", "cat": "任务", "title": "里程碑",
+          "brief": "用户第一次成功发布。", "tags": ["发布"], "sal": 5, "str_": 1.0,
+          "hits": 0, "last_hit": 0.0, "imp": 0.5, "media": [], "vec": None, "vk": ""}
+    lst = daily + [dict(ms)]
+    ML._trim_episodes(lst)
+    case("里程碑守恒（容量触顶不被挤出）",
+         len(lst) == ML._EPI_CAP and any(e.get("title") == "里程碑" for e in lst),
+         "裁剪后 %d 条" % len(lst))
+    # 对照组：同权时按新旧淘汰 —— 证明是「重要度」在起作用，不是巧合
+    ctrl = daily + [dict(ms, sal=1)]
+    ML._trim_episodes(ctrl)
+    case("同权淘汰对照组（重要度确实在起作用）",
+         not any(e.get("title") == "里程碑" for e in ctrl))
+
+    # 2) 只巩固被召回的条目（防止"沾边即巩固"把遗忘曲线拉平）
+    for i in range(3):
+        ML.episode_push("记账本项目·第%d期" % (i + 1), "围绕记账本项目做迭代。",
+                        ["记账本", "项目"], "任务", salience=1)
+    ML.recall_layers("记账本项目进展", top=1)
+    bumped = [e for e in ML.episodes() if int(e.get("hits", 0)) > 0]
+    case("只巩固被召回的条目", len(bumped) == 1, "被巩固 %d 条（期望 1）" % len(bumped))
+
+    # 3) 重要度参数真的生效（统一签名 episode_push(salience=)）
+    ML.episode_push("里程碑·签名", "写入一条高重要度经历。", ["测试"], "任务", salience=5)
+    eps = ML.episodes()
+    case("episode_push 接受并保存 salience",
+         bool(eps) and int(eps[0].get("sal", 1)) == 5)
+
+    # 4) 双时态：新事实覆盖旧事实，旧的失效但不删除
+    FA.fact_put("居住地", "北京", "我住在北京", kind="location")
+    r = FA.fact_put("居住地", "上海", "我搬到上海了", kind="location")
+    act = [f["value"] for f in FA.active_facts()]
+    case("矛盾检测：新事实取代旧事实", r.get("action") == "updated" and act == ["上海"],
+         "当前有效=%s" % act)
+    case("双时态：旧事实可追溯", 
+         sorted(f["status"] for f in FA.fact_history("居住地")) == ["active", "superseded"])
+
+    # 5) 过期事实绝不进检索结果（对标 Zep 双时态图的能力项）
+    vals = [f["value"] for f in FA.facts_recall("我现在住哪儿")]
+    case("过期事实不被召回", "上海" in vals and "北京" not in vals, "召回=%s" % vals)
+
+    # 6) 意图词别名通道：问句里没有"居住地"三个字也要命中
+    case("意图别名召回（住哪 → 居住地）", len(FA.facts_recall("我住哪儿")) > 0)
+
+    # 7) 计划类事实到期 → 时序自更新（要去 → 去过）
+    FA.fact_put("计划·明天", "北京", "我明天要去北京", kind="plan", due="明天")
+    n = FA.expire_plans(now=time.time() + 3 * 86400)
+    later = time.time() + 3 * 86400
+    case("计划到期自动改写成已发生",
+         n == 1 and any("已发生" in f["subject"] for f in FA.active_facts(later))
+         and not any(f["kind"] == "plan" for f in FA.active_facts(later)), "改写 %d 条" % n)
+
+    # 8) 事实层经记忆层召回通道进入提示词
+    blk = ML.recall_layers("我现在住哪儿")
+    case("事实层进入召回文本", "上海" in blk and "北京" not in blk)
+
+    # 9) 世界模型：从办事历史学出前向预测（W1）
+    ctx = "帮我写个脚本统计字数"
+    for _ in range(4):
+        WM.observe(ctx, "script", True, "跑通了")
+    WM.observe(ctx, "script", False, "报错")
+    p = WM.predict(ctx, "script")
+    case("W1 动作后果表：成功率高于先验", 0.6 < p < 0.95, "p=%.3f" % p)
+    case("W1 没数据就说不知道（返回先验）",
+         abs(WM.predict(ctx, "根本没见过的动作") - WM.PRIOR) < 1e-6)
+
+    # 10) 领域回退：同类新任务也要有估计（不是只会背原题）
+    fresh = "帮我把昨天那份日志跑一遍脚本"
+    case("W1 领域回退（新任务也能估）",
+         WM.domain_of(fresh) == "脚本" and abs(WM.predict(fresh, "script") - WM.PRIOR) > 1e-6)
+
+    # 11) W2 脑内预演：整体成功率 = 各步之积
+    r2 = WM.rollout(["script", "script"], ctx)
+    case("W2 预演乘积正确", abs(r2["p"] - round(p * p, 4)) < 1e-3, "p=%s" % r2["p"])
+
+    # 12) 多模态条目（P3）：挂了图仍然能被文本召回，且不崩
+    ML.episode_push("给用户做的海报", "生成了一张发布会海报。", ["海报", "图片"],
+                    "任务", salience=3, media=["C:/tmp/poster_final.png"])
+    case("多模态条目可文本召回", "海报" in ML.recall_layers("那张海报"))
+
+    # 13) 写盘去抖后仍能落盘（P0.5）
+    ML.flush(force=True)
+    case("去抖写盘可强制落地", os.path.exists(os.path.join(d, "episodic.json")))
+except Exception as ex:
+    case("评测过程未抛异常", False, type(ex).__name__ + ": " + str(ex))
+# 刻意**不**把数据目录改回去：本探针跑在一次性子进程里，改回去反而可能
+# 往用户真实目录写东西。让进程带着临时目录退出最安全。
+
+ok = [c for c in out["scenarios"] if c["ok"]]
+out["score"] = round(len(ok) / max(len(out["scenarios"]), 1), 4)
+out["failed"] = [c for c in out["scenarios"] if not c["ok"]]
+print(SENTINEL + json.dumps(out, ensure_ascii=False))
+"""
+
+
+def check_memory_quality(agent) -> None:
+    """记忆质量评测：把"记得对不对"变成可回归的分数（P0.4 + P1.4）。
+
+    断言的是**行为**：里程碑守恒、只巩固被召回的、双时态不召回过期事实、
+    意图别名、计划到期改写、世界模型前向预测与领域回退、多模态条目。
+    这堵住了"验 A 跑 B"——套件测的与产品跑的是**同一份**核心实现。
+    """
+    data = _j(agent.ctx.probe("core", MEMORY_QUALITY_CODE, timeout=150))
+    if data is None:
+        agent.fail("记忆质量评测探测失败")
+        return
+    fatal = data.get("fatal")
+    if fatal:
+        agent.fail("记忆质量评测无法运行", str(fatal)[:250])
+        return
+    sc = data.get("scenarios") or []
+    failed = data.get("failed") or []
+    score = float(data.get("score") or 0.0)
+    if not sc:
+        agent.fail("记忆质量评测没有产出任何场景")
+        return
+    if failed:
+        agent.fail("记忆质量评测未达标（%.0f%%）" % (score * 100),
+                   "失败 %d/%d：%s" % (
+                       len(failed), len(sc),
+                       "；".join("%s（%s）" % (c["name"], c.get("detail") or "无细节")
+                                 for c in failed[:4])))
+    else:
+        agent.ok("记忆质量评测 %d/%d 全过" % (len(sc), len(sc)),
+                 "基线 %.1f：里程碑守恒 / 只巩固被召回的 / 双时态 / 别名 / "
+                 "计划自更新 / 世界模型 / 多模态" % float(data.get("baseline") or 1.0))
+
+
 # ---------------------------------------------------------------- 汇总用
 def all_checks(agent) -> None:
     """跑一遍全部基础检查（core-verifier 的默认配方）。"""
     check_contract(agent)
     check_cognitive_layers(agent)
     check_symbolic_loop(agent)
+    check_memory_quality(agent)
     check_learning_contract(agent)
     if agent.ctx.has("core") and agent.ctx.has("lite"):
         check_learning_swap(agent)
