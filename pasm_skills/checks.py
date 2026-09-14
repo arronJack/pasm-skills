@@ -764,6 +764,29 @@ try:
     json.dump(_raw, open(_p, "w", encoding="utf-8"), ensure_ascii=False)
     case("别名表升级后旧条目就地重算",
          not any(f["subject"] == "居住地" for f in FA.facts_recall("记住我明天去医院")))
+
+    # 19) 跨表述检索的"默认档"：口语问法要能对上记忆里的规范标签
+    ML.episode_push("本人信息", "陈秀兰，78 岁，住老街 3 号院",
+                    ["姓名", "年龄", "住址"], "陪伴", salience=5)
+    blk2 = ML.recall_layers("我叫什么名字")
+    case("口语问法能召回规范标签（意图同义通道）",
+         bool(blk2) and ("姓名" in blk2 or "陈秀兰" in blk2))
+
+    # 20) 领域词表能区分日常场景（否则领域层退化，分层回退失效）
+    case("W1 日常领域可区分（生活 / 健康 / 家人）",
+         WM.domain_of("出门买菜") == "生活"
+         and WM.domain_of("去医院复查挂号") == "健康"
+         and WM.domain_of("给女儿打电话") == "家人")
+
+    # 21) 三层回退：本领域无记录、但该动作在别领域有经验 → 弱先验而非 0.5
+    WM.reset()
+    for _ in range(12):
+        WM.observe("出门买菜带不带伞", "带伞", True)
+    p_same, p_cross = (WM.predict("出门买菜带不带伞", "带伞"),
+                       WM.predict("去医院复查挂号排队", "带伞"))
+    case("三层回退：跨领域弱先验（优于一律 0.5）",
+         WM.PRIOR < p_cross < p_same,
+         "同领域 %.4f / 跨领域 %.4f" % (p_same, p_cross))
 except Exception as ex:
     case("评测过程未抛异常", False, type(ex).__name__ + ": " + str(ex))
 # 刻意**不**把数据目录改回去：本探针跑在一次性子进程里，改回去反而可能
