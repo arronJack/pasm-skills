@@ -15,8 +15,63 @@
 |---|---|---|
 | **📖 使用教程** | 从"这是干什么的"到"写出并发布一个智能体"，走一遍 | **[`docs/TUTORIAL.md`](docs/TUTORIAL.md)** |
 | **SDK** | `BaseAgent` —— 记忆 / 情绪 / 动作 / 反馈 / 持久化开箱可用 | `from pasm_skills.sdk import BaseAgent` |
+| **认知层** | 语义检索 / 遗忘曲线 / 记忆巩固 / 焦点栈 / 心跳 / 工具注册表 | `from pasm_skills.cognition import enhance` |
 | **框架** | 智能体基类与注册表、仓隔离探测、场景仿真底座、核心契约检查工具箱 | `from pasm_skills.agent import Agent, register` |
 | **打包** | 把智能体打成平台可直接上传的技能包（两种归档形态） | `from pasm_skills.build import SkillSpec, run_cli` |
+
+---
+
+## 〇、PASM 生态索引（六仓同频）
+
+PASM 不是一个仓，而是一套分层生态：
+
+| 仓 | 角色 | 可见性 | 版本 |
+|---|---|---|---|
+| **`pasm-skills`（本仓）** | **基座**：`BaseAgent` + 认知能力层 | 公开 | **0.5.0** |
+| `pasm-agents` | 成品智能体集（NPC / 陪伴 / 教学 / 验证） | 公开 | 0.4.5 |
+| `pasm-mcp-server` | MCP 接入层：给任意 AI 客户端装长期记忆 | 公开 | 0.2.0 |
+| `PASM-Lite` | 教学版 + 认知引擎接口 | 公开 | — |
+| `PASM` | 核心引擎（七层仿生 / 世界模型） | **私有** | 0.7.1 |
+| `pasm-qclaw` | 桌面应用发行通道 | 公开 | 0.29.1 |
+
+流向：`PASM`（核心）→ `pasm-skills`（基座）→ `pasm-agents`（智能体）→
+`pasm-mcp-server`（分发）→ `pasm-qclaw`（桌面产品）；`PASM-Lite` 是面向外界的教学窗口。
+
+地址：
+[Gitee](https://gitee.com/arronzheng/pasm-skills) ·
+[GitHub](https://github.com/arronJack/pasm-skills)
+
+---
+
+## 一之二、认知能力层（0.5.0 新增）
+
+`BaseAgent` 给的是**基础认知原语**；下面这些是长期相处才看得出差别的能力。
+两行接入，**不改你已有的智能体一行代码**：
+
+```python
+from pasm_skills.cognition import enhance
+
+cog = enhance(agent)                       # 挂上全部认知能力
+cog.observe("姓名", "小明", tags=["身份"], salience=4)
+cog.recall("我叫什么名字")                  # ← 字面匹配做不到，这里能命中
+```
+
+| 能力 | 解决什么 | 模块 |
+|---|---|---|
+| **语义检索** | 换个说法就检索不到（命中率 0.5 → 0.8+）：中文同义扩展 + 可插拔向量后端 | `cognition.semantic` |
+| **遗忘曲线** | 停练 25 天和昨天一样强 → 学情失真 | `cognition.forgetting` |
+| **记忆巩固** | 重复经历撑爆记忆池 → 睡眠回放蒸馏成要点 | `cognition.forgetting` |
+| **焦点栈** | 长对话跑题、记不住"现在在聊什么" | `cognition.focus` |
+| **心跳** | 智能体纯被动、永远不会主动开口 | `cognition.tick` |
+| **工具注册表** | 动作名 ≠ 可执行工具；无法被发现、无法被授权 | `cognition.tools` |
+
+```bash
+python -m pasm_skills cognition     # 27 项自检
+```
+
+> 内置向量后端是**零依赖离线**的字符 n-gram hashing（配中文同义概念表）。
+> 想要真正的语义向量，配一个 OpenAI 兼容的 embedding 接口即可自动接管：
+> `PASM_EMBED_URL` / `PASM_EMBED_MODEL` / `PASM_EMBED_KEY`。
 
 ---
 

@@ -6,6 +6,7 @@
     python -m pasm_skills run --all                 # 跑全部（发现的全部）
     python -m pasm_skills run regression --update   # 刷新事实基线
     python -m pasm_skills selftest                  # 自检（零依赖，随时可跑）
+    python -m pasm_skills cognition                 # 认知能力层自检（语义/遗忘/巩固/焦点/心跳）
     python -m pasm_skills agents                    # 只列出智能体加载来源（排障用）
 
 退出码：0 = 全部通过；1 = 有 FAIL；2 = 用法/定位错误。
@@ -140,6 +141,12 @@ def cmd_selftest(args) -> int:
     return 0 if selftest() else 1
 
 
+def cmd_cognition(args) -> int:
+    """认知能力层自检（语义检索 / 遗忘 / 巩固 / 焦点 / 心跳 / 工具）。"""
+    from .cognition import _selftest
+    return 1 if _selftest() else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="pasm-skills",
@@ -151,6 +158,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("agents", help="只报告智能体加载来源（排障）").set_defaults(func=cmd_agents)
     sub.add_parser("repos", help="只打印仓库定位").set_defaults(func=cmd_repos)
     sub.add_parser("selftest", help="框架自检").set_defaults(func=cmd_selftest)
+    sub.add_parser(
+        "cognition",
+        help="认知能力层自检（语义检索/遗忘/巩固/焦点/心跳/工具）",
+    ).set_defaults(func=cmd_cognition)
 
     r = sub.add_parser("run", help="运行智能体")
     r.add_argument("agents", nargs="*", help="智能体名（可多个）")

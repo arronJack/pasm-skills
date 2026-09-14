@@ -2,6 +2,43 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] — 2026-09-15
+
+### 新增 —— 认知能力层 `pasm_skills.cognition`（补齐四项长期短板）
+
+新增子包，零第三方依赖、档位无关、旁挂式接入（`enhance(agent)` 两行接入，不改 `BaseAgent`）：
+
+| 能力 | 长期的真实问题 | 模块 |
+|---|---|---|
+| 语义检索 | 记忆存「姓名」、用户问「我叫什么名字」→ 字面匹配命中率约 0.5 | `cognition/semantic.py` |
+| 遗忘曲线 | 停练 25 天与昨天一样强 → 学情失真、检索噪声累积 | `cognition/forgetting.py` |
+| 记忆巩固 | 只有进没有蒸馏 → 重复经历撑爆记忆池 | `cognition/forgetting.py` |
+| 焦点栈 | 长对话跑题、不知道"现在在聊什么" | `cognition/focus.py` |
+| 心跳主循环 | 智能体纯被动，无空闲自主行为、无后台任务时机 | `cognition/tick.py` |
+| 工具注册表 | 动作名 ≠ 可执行工具；无法被发现、无法被授权 | `cognition/tools.py` |
+
+关键设计：
+
+- **可插拔向量后端**：内置 `hashing-ngram`（零依赖离线保底），装了 sentence-transformers /
+  fastembed 或配了 `PASM_EMBED_URL` 就自动接管，索引结构不变。
+- **中文同义扩展桥**：命中概念（姓名/年龄/薄弱/情绪…）就扩展同义说法检索 —— 这是"换说法命中率"的真正来源。
+- **旁挂 sidecar 而非改写主存储**：复习次数 / 已合并 / 已归档记在 sidecar 文件里，
+  核心档与轻量档共用一套逻辑，不破坏任何一方数据。
+- **异常隔离**：心跳处理器炸了循环照常；单个工具炸了不影响智能体。
+- **间接索引**：`SemanticIndex.similarity(key_a, key_b)` 直接读向量，
+  避免巩固聚类退化成 O(n³)。
+
+### 变更
+
+- CLI 新增 `pasm-skills cognition`（认知层自检，27 项）。
+- `packages` 纳入 `pasm_skills.cognition`。
+
+### 验证
+
+- `python -m pasm_skills cognition` → **27 项通过，0 失败**（含端到端：换说法命中身份记忆、
+  复习效应、巩固落盘、重启后索引恢复、零第三方依赖静态检查）。
+- `python -m pasm_skills selftest` → 通过（框架未改坏）。
+
 ## [0.4.4] — 2026-09-14
 
 ### 新增 —— 记忆质量评测（`check_memory_quality`）：把记忆层从「零覆盖」变成可回归基线

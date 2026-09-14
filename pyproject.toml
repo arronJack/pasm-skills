@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pasm-skills"
-version = "0.4.4"
-description = "PASM 智能体基座 —— 写/跑基于 PASM 引擎的智能体：SDK（BaseAgent）+ 智能体框架 + 场景仿真 + 技能包打包工具"
+version = "0.5.0"
+description = "PASM 智能体基座 —— 写/跑基于 PASM 引擎的智能体：SDK（BaseAgent）+ 认知能力层（语义检索/遗忘/巩固/焦点/心跳/工具）+ 智能体框架 + 场景仿真 + 技能包打包工具"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -46,7 +46,7 @@ Issues = "https://gitee.com/arronzheng/pasm-skills/issues"
 pasm-skills = "pasm_skills.cli:main"
 
 [tool.setuptools]
-packages = ["pasm_skills", "pasm_skills.sdk"]
+packages = ["pasm_skills", "pasm_skills.sdk", "pasm_skills.cognition"]
 
 [tool.setuptools.package-data]
 pasm_skills = ["py.typed"]
