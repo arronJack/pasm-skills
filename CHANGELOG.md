@@ -34,10 +34,18 @@
 
 运行：`python -m demo.run_all`（从仓根）或 `python demo/step_01_minimal.py`。
 
+### 修复
+
+- `demo` 包钉死在 SDK 内置 `light` 档（`demo/__init__.py` 在 import 时把 `BaseAgent.__init__`
+  的 `use_core` 默认值改成 `False`）：本机装有私有 PASM 核心时，demo 默认会走 `core` 档，
+  而当前核心的反馈塑形 / 记忆检索尚有缺陷，会让教程「应用效果」数字失真
+  （如 `recall('行程问题')` 返回空、反馈前后动作分布不变）。钉死后教程在**任何环境**都显示
+  确定且正确的效果，也契合「离线优先、不依赖私有核心」的设计。
+
 ### 变更
 
 - README 目录补 `demo/`，「30 秒写一个智能体」一节加 `demo` 包入口
-- 版本 0.4.2（与 `pasm-agents` 对齐到 0.4.4）
+- 版本 0.4.2（与 `pasm-agents` 对齐到 0.4.3）
 - `demo/README.md` 新增「PASM 是什么 · 为什么用 pasm-skills · 优劣势」前置章节：
   含三层交付关系、核心特性表、与"从零写 / 纯 LLM / 编排框架"的对比、优劣势与适用边界、一句话选型
 

@@ -15,3 +15,21 @@
 from __future__ import annotations
 
 __all__ = []
+
+# 本 demo 教程**钉死**在 SDK 自带的 light 档（use_core=False）：
+# 这样无论运行环境有没有装私有 PASM 核心引擎，教程展示的「反馈塑形 / 记忆检索」
+# 等应用效果数字都是确定且正确的。私有核心在某些环境下反馈/检索尚有缺陷，
+# 不应在教程里把错误行为暴露给学习者。
+#
+# 注意：这只是 demo 包内的局部行为——它发生在 import demo 时，对 demo 自身进程负责，
+# 不会影响把 pasm_skills 当作库使用的其他代码（教程本就是独立运行入口）。
+import pasm_skills.sdk.base as _sdk_base
+
+_orig_base_init = _sdk_base.BaseAgent.__init__
+
+
+def _demo_base_init(self, *args, use_core: bool = False, **kwargs):
+    return _orig_base_init(self, *args, use_core=use_core, **kwargs)
+
+
+_sdk_base.BaseAgent.__init__ = _demo_base_init
