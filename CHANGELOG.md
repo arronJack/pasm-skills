@@ -2,6 +2,24 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.3] — 2026-09-14
+
+### 修复 —— 核心档（`use_core=True`，即装了私有 PASM 核心时）的反馈塑形与召回
+
+- `sdk/base.py` 的 `_CoreAdapter.recall` 原来调 `recall_layers(..., k=k)`，但核心函数
+  的关键字参数是 `top` 不是 `k` → `TypeError` 被 `except` 吞掉 → **核心档召回永远返回空**。
+  改为直接用核心的 `episodes()` + `_score` 取情景记忆 dict（契约与 `_LightAdapter.recall` 一致），
+  顺便修掉"返回字符串被逐字符遍历成一堆 `{'content':'某字'}`"的旧坑。
+- 顺手修正 `__version__`（此前 `pyproject` 已是 0.4.2 但 `__init__` 还停在 0.4.1，运行时版本号对不上）。
+- 注：核心 `LearningEngine.design` 的 `STAGE_ACTS` 过度裁剪问题在私有核心
+  `pasm/cognitive/learning.py` 修（详见 PASM 核心仓），本仓 SDK 无需改设计逻辑。
+
+### 验证
+
+- 核心档反馈塑形：teach 23.8% → 80.0%、peek 29.5% → 3.5%（此前锁死在 peek）
+- 核心档召回：`recall('行程问题')` 正确命中 title，chat 能引用该记忆
+- light 档（公开用户默认）无回归：`python -m demo.run_all` / `pasm_skills selftest` 全过
+
 ## [0.4.2] — 2026-09-13
 
 ### 新增 —— `demo/` 分步教程包：手把手教人从零写一个智能体

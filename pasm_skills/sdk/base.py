@@ -430,19 +430,29 @@ class _CoreAdapter:
         )
 
     def recall(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+        """跨层检索，返回情景记忆命中列表（与 light 档同契约：[{title, brief, tags, sal, ...}]）。
+
+        核心的 ``recall_layers`` 返回的是**已格式化的字符串**（给 companion 直接拼进
+        系统提示词用），和 BaseAgent.recall 约定的「列表(dict)」不一致；直接喂进去会被当成
+        字符串逐字符遍历，得到一堆 ``{"content": "某字"}``，``_render_reply`` 取 ``.get('title')``
+        全空。所以这里直接用核心的 ``episodes()`` + ``_score`` 取情景记忆 dict，
+        契约与 ``_LightAdapter.recall`` 完全一致。
+        """
+        q = (query or "").strip()
+        if not q:
+            return []
         try:
-            hits = self._mem.recall_layers(query, k=k) or []
+            scored = []
+            for e in self._mem.episodes():
+                hay = (e.get("title", "") + " " + " ".join(e.get("tags", []))
+                       + " " + e.get("brief", ""))
+                sc = self._mem._score(q, hay)
+                if sc > 0:
+                    scored.append((sc, e))
+            scored.sort(key=lambda x: x[0], reverse=True)
+            return [dict(e) for _, e in scored[:k]]
         except Exception:
-            hits = []
-        out = []
-        for h in hits:
-            if isinstance(h, dict):
-                out.append(dict(h))
-            elif isinstance(h, (list, tuple)) and len(h) >= 2:
-                out.append({"score": h[0], **(h[1] if isinstance(h[1], dict) else {"content": h[1]})})
-            else:
-                out.append({"content": str(h)})
-        return out
+            return []
 
     def learn_pick(self, candidates: List[str], base=None,
                    persona=None, stage=None) -> str:
