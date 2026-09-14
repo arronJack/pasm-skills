@@ -727,6 +727,43 @@ try:
     # 13) 写盘去抖后仍能落盘（P0.5）
     ML.flush(force=True)
     case("去抖写盘可强制落地", os.path.exists(os.path.join(d, "episodic.json")))
+
+    # ---- 以下 5 项来自 2026-09-14 的对抗式重检测（tools/audit_memory_worldmodel.py）----
+    # 14) 别名**精度**：单字别名会误命中（"记住…"里含"住"）——必须归零
+    case("别名精度：单字别名不误命中",
+         FA._alias_score("记住我明天要去医院复查", {"subject": "居住地"}) == 0)
+
+    # 15) 跨关系不串味：某一门亲戚的别名只应是它自己
+    FA.fact_put("关系·老伴", "李秀兰", kind="relation")
+    FA.fact_put("关系·儿子", "张伟", kind="relation")
+    rel = [f["subject"] for f in FA.facts_recall("我儿子叫什么")]
+    case("跨关系不串味（问儿子不带出老伴）",
+         FA._aliases("关系·老伴") == ["老伴"] and "关系·老伴" not in rel,
+         "别名=%s 召回=%s" % (FA._aliases("关系·老伴"), rel))
+
+    # 16) 同句多事实按**文本位置**去重（后说的为准，不是按规则表顺序）
+    mv = [c["value"] for c in FA.extract_facts("我搬到上海了，不过我现在住在北京")
+          if c["subject"] == "居住地"]
+    case("同句多事实按文本位置去重", mv == ["北京"], "抽到=%s" % mv)
+
+    # 17) 置信度门：低置信度新说法不得推翻已确认事实，只挂起待确认
+    FA.fact_put("过敏源", "青霉素", conf=0.95, src="manual")
+    rp = FA.fact_put("过敏源", "花粉", conf=0.3, src="chat")
+    al2 = [f["value"] for f in FA.active_facts() if f["sid"] == FA._norm_key("过敏源")]
+    case("低置信度不覆盖已确认事实（挂起待确认）",
+         rp.get("action") == "pending" and al2 == ["青霉素"],
+         "action=%s 有效=%s" % (rp.get("action"), al2))
+
+    # 18) 别名表升级后，**已落盘的旧条目**不再沿用坏别名
+    FA.fact_put("居住地", "广州", "我住在广州", kind="location")
+    _p = os.path.join(d, "facts.json")
+    _raw = json.load(open(_p, encoding="utf-8"))
+    for _f in _raw:
+        if _f.get("subject") == "居住地":
+            _f["keys"], _f["alias_ver"] = ["住"], 1          # 模拟旧版残留
+    json.dump(_raw, open(_p, "w", encoding="utf-8"), ensure_ascii=False)
+    case("别名表升级后旧条目就地重算",
+         not any(f["subject"] == "居住地" for f in FA.facts_recall("记住我明天去医院")))
 except Exception as ex:
     case("评测过程未抛异常", False, type(ex).__name__ + ": " + str(ex))
 # 刻意**不**把数据目录改回去：本探针跑在一次性子进程里，改回去反而可能
