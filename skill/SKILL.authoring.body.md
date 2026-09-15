@@ -213,6 +213,9 @@ python tools/build_skill.py --zip --clean     # 打两种形态 + ZIP（内置�
 
 > ⚠️ `zip-root` 形态**必须**把 `SKILL.md` 放在 ZIP 根目录。包成 `skills/<name>/SKILL.md`
 > 会被平台拒收（报「压缩包缺少 SKILL.md 文件」）—— 平台不递归找。打包库已内置校验。
+> ⚠️ 正文里教用户敲的每条命令，都要在**真 `pip install` 装出来的环境**里跑一遍：
+> 开发时能跑 ≠ 装了能跑 —— 比如 `tools/xxx.py` 不进 wheel（`packages.find` 默认只收你的包目录），
+> 照正文做的用户手里根本没这个文件。实现放包里（`python -m <包>.<模块>`），`tools/` 只留转发壳。
 
 ## 10. 进阶：写验证智能体
 
@@ -244,6 +247,22 @@ class MyVerifier(Agent):
 [project.entry-points."pasm_skills.agents"]
 my-agents = "my_pkg.agents"
 ```
+
+### 10.1 自检护栏自己必须"可重复"（三条血泪）
+
+护栏写错比不写更糟：它会把**环境残留**报成**能力缺失**，让人去修根本没坏的代码。三条硬规则：
+
+1. **隔离要清"整族"，不能只删基础目录。** 智能体常有 `<id>_ref` / `<id>_brief` / `<id>_fresh` 等变体目录，
+   只删基础 id 会留下变体、改变检索排序 —— 同一份代码在干净机器上满分、在你机器上扣分。
+   写法：`for p in (Path.home() / ".pasm-agents").glob(<id> + "*"): shutil.rmtree(p, ignore_errors=True)`
+2. **被测实现带随机/抖动时，只钉确定性契约。** 例如选题是"80% 最弱 + 20% 随机"，
+   就断言 `snapshot()["weakest"]` 与抖动取值范围，**绝不**断言某一次 `pick_next()` 的具体结果
+   （`check(..., reply == pick_next())` 这种必 flaky）。
+3. **断言里的中间量要与实现同源。** 别拿 A 接口的抽样结果去断言 B 接口的文本 —— 先取稳定字段
+   （`snapshot()`），再让文本里的数字与它自洽（如 `f"{int(mastery[t] * 100)}%" in reply`）。
+
+> 复检口径：**同一个包连跑 3 次、并在一台"脏机器"上再跑一遍，结论必须一致**。
+> 只跑一次就绿的护栏，等于没护栏。
 
 ## 11. 相关
 
