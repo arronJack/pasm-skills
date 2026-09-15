@@ -418,6 +418,16 @@ def check_parity(agent, pairs: Optional[List[tuple]] = None) -> None:
     if not agent.ctx.has(k1, k2):
         agent.skip("跨仓一致性检查跳过", "缺少 %s 或 %s 仓" % (k1, k2))
         return
+    # 退化判定：桌面端自 0.29.x 起并入核心仓，`studio` 键会解析到**同一个目录**。
+    # 此时两侧逐字比对必然一致 —— 会报出一片"逐字一致"的**假绿**，
+    # 让人以为守门还在工作。必须显式说明"这次没有对照物"，而不是给个 OK。
+    if agent.ctx.path(k1) == agent.ctx.path(k2):
+        agent.skip("跨仓一致性检查跳过（无对照物）",
+                   "%s 与 %s 解析到同一个仓（%s）：桌面端已并入核心仓，"
+                   "同名文件比对失去意义。同仓内部一致性请用核心仓的完整性守卫"
+                   "（PASM/tools/verify_core_complete.py）"
+                   % (k1, k2, agent.ctx.path(k1)))
+        return
     d1, d2 = agent.ctx.rel(k1, *sub1.split("/")), agent.ctx.rel(k2, *sub2.split("/"))
     f1 = {p.name for p in d1.glob("*.py")} if d1.is_dir() else set()
     f2 = {p.name for p in d2.glob("*.py")} if d2.is_dir() else set()

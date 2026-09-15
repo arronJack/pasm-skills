@@ -11,9 +11,23 @@ import，`sys.modules` 会互相顶掉，结论就不可信了。
 代价是慢几十毫秒，换来的是结论可复现。
 
 定位顺序（每个仓各自决定）：
-    1. 环境变量：PASM_CORE / PASM_STUDIO / PASM_LITE
-    2. 约定路径：E:/AI/PASM、E:/AI/pasm_qclaw、E:/AI/PASM_LITE
+    1. 环境变量：PASM_CORE / PASM_STUDIO / PASM_LITE（直接给绝对路径）
+    2. 生态根目录 × 该仓的目录名（见 `REPO_SPEC` 与 `_ecosystem_roots()`）
     3. 从 `PASM_SKILLS_ROOTS`（分号分隔）逐层向下搜同名目录
+
+生态根目录怎么来的（**不写死盘符**）
+----------------------------------
+2026-09-15 的教训：生态在**公司机（`E:\\AI\\pasm`）**与**家机（`H:\\pasm`）**
+之间来回拷贝，而这里原先写死了 `E:/AI/PASM`、`E:/AI/pasm_qclaw`、
+`E:/AI/PASM_LITE` 三个"约定路径" —— 换到任何别的布局，三仓全部定位失败，
+所有依赖仓的智能体集体静默跳过。
+
+现在改为按优先级自动发现：
+    1. `PASM_SKILLS_ROOTS` / `PASM_HOME` / `PASM_ROOT` / `PASM_CODE`
+    2. 本包自身位置：`<生态根>/pasm-skills/pasm_skills/context.py`
+       → 上溯两级即得生态根（源码布局下永远正确）
+    3. 当前工作目录逐级上溯（从某个仓内部运行脚本时同样有效）
+    4. `~/AI`、`E:/AI`（历史布局，仅兜底）
 """
 from __future__ import annotations
 
@@ -25,14 +39,65 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-#: 仓键 -> (环境变量名, 默认绝对路径, 判定"这是个仓"的标志文件)
+#: 仓键 -> (环境变量名, 仓目录名候选, 判定"这是个仓"的标志文件)
+#:
+#: 注意 `core` 与 `studio` 的目录名候选相同：桌面端自 0.29.x 起已并入核心仓
+#: （`desktop/` 就在 `PASM/` 里），但为兼容历史上分仓的
+#: `pasm_qclaw/desktop/pasm_companion.py` 布局，这里两个名字都留着。
 REPO_SPEC: Dict[str, tuple] = {
-    "core":   ("PASM_CORE",   "E:/AI/PASM",       "pasm/__init__.py"),
-    "studio": ("PASM_STUDIO", "E:/AI/pasm_qclaw", "desktop/pasm_companion.py"),
-    "lite":   ("PASM_LITE",   "E:/AI/PASM_LITE",  "pasm_lite.py"),
+    "core":   ("PASM_CORE",   ("PASM", "pasm"),
+               "pasm/__init__.py"),
+    "studio": ("PASM_STUDIO", ("PASM", "pasm_qclaw", "pasm-qclaw", "pasm_qclaw_release"),
+               "desktop/pasm_companion.py"),
+    "lite":   ("PASM_LITE",   ("PASM-Lite", "PASM_LITE", "pasm-lite"),
+               "pasm_lite.py"),
 }
 
 SENTINEL = "@@PASM_SKILLS_JSON@@"
+
+
+def _ecosystem_roots() -> List[str]:
+    """按优先级收集"生态根目录"候选（去重、只保留存在的目录）。"""
+    roots: List[str] = []
+
+    def add(path) -> None:
+        if not path:
+            return
+        try:
+            rp = os.path.abspath(os.path.expanduser(str(path)))
+        except Exception:                                  # noqa: BLE001
+            return
+        if rp not in roots and os.path.isdir(rp):
+            roots.append(rp)
+
+    raw = os.environ.get("PASM_SKILLS_ROOTS", "")
+    for p in raw.split(os.pathsep):
+        if p.strip():
+            add(p.strip())
+    for key in ("PASM_HOME", "PASM_ROOT", "PASM_CODE"):
+        add(os.environ.get(key))
+
+    # 本包自身位置：<生态根>/pasm-skills/pasm_skills/context.py
+    here = Path(__file__).resolve()
+    add(here.parent.parent.parent)          # 生态根
+    add(here.parent.parent.parent.parent)   # 生态根的父级
+    add(here.parent.parent)                 # 仓根
+
+    # 从 CWD 逐级上溯（脚本常在某个仓内部运行）
+    try:
+        cur = Path.cwd().resolve()
+    except OSError:
+        cur = None
+    if cur:
+        for _ in range(5):
+            add(cur)
+            if cur.parent == cur:
+                break
+            cur = cur.parent
+
+    add(Path.home() / "AI")                 # 普通家目录布局
+    add("E:/AI")                            # 历史遗留，仅兜底
+    return roots
 
 
 class RepoContext:
@@ -40,38 +105,19 @@ class RepoContext:
 
     def __init__(self, roots: Optional[List[str]] = None):
         self._paths: Dict[str, Optional[Path]] = {}
-        self._roots = roots or self._env_roots()
+        self._roots = list(roots) if roots else _ecosystem_roots()
         for key in REPO_SPEC:
             self._paths[key] = self._locate(key)
 
     # ------------------------------------------------------------ 定位
-    @staticmethod
-    def _env_roots() -> List[str]:
-        raw = os.environ.get("PASM_SKILLS_ROOTS", "")
-        roots = [p for p in raw.split(os.pathsep) if p.strip()]
-        roots += ["E:/AI", str(Path.home() / "AI")]
-        seen, out = set(), []
-        for r in roots:
-            rp = os.path.abspath(r)
-            if rp not in seen and os.path.isdir(rp):
-                seen.add(rp)
-                out.append(rp)
-        return out
-
     def _locate(self, key: str) -> Optional[Path]:
-        env_name, default, marker = REPO_SPEC[key]
+        env_name, dirnames, marker = REPO_SPEC[key]
         explicit = os.environ.get(env_name)
-        cands: List[Path] = []
-        if explicit:
-            cands.append(Path(explicit))
-        cands.append(Path(default))
-        for c in cands:
-            if (c / marker).exists():
-                return c.resolve()
-        # 兜底：在 roots 下按目录名找
-        wanted = Path(default).name
+        if explicit and (Path(explicit) / marker).exists():
+            return Path(explicit).resolve()
         for root in self._roots:
-            for c in (Path(root) / wanted, Path(root) / wanted.lower()):
+            for name in dirnames:
+                c = Path(root) / name
                 if (c / marker).exists():
                     return c.resolve()
         return None
@@ -108,7 +154,15 @@ class RepoContext:
         return None
 
     def describe(self) -> Dict[str, Any]:
-        return {k: (str(v) if v else None) for k, v in self._paths.items()}
+        d: Dict[str, Any] = {k: (str(v) if v else None) for k, v in self._paths.items()}
+        # 顺带把"搜索了哪些根目录"一并给出：定位失败时这是唯一能自证的线索
+        d["roots"] = list(self._roots)
+        return d
+
+    @property
+    def roots(self) -> List[str]:
+        """本次定位使用的生态根目录候选（调试/报错用）。"""
+        return list(self._roots)
 
     # ------------------------------------------------------------ 文件工具
     @staticmethod
