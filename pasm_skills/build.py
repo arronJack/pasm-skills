@@ -310,6 +310,19 @@ def clean_dist(dist: Path) -> None:
             print("[INFO] 旧产物已挪到 %s" % dst)
         except Exception as ex:                      # noqa: BLE001
             print("[WARN] 挪动失败（继续构建）：%s" % ex, file=sys.stderr)
+    # 根目录的上传用 ZIP 也要一起挪走 —— 否则新旧版本混在同一目录，
+    # 上传时极易拿错文件（这正是"发出去的还是上一版"的经典成因）。
+    old_zips = sorted(dist.glob("*.zip"))
+    if old_zips:
+        stale.mkdir(parents=True, exist_ok=True)
+        zip_dir = stale / ("zips-%s" % stamp)
+        zip_dir.mkdir(parents=True, exist_ok=True)
+        for z in old_zips:
+            try:
+                shutil.move(str(z), str(zip_dir / z.name))
+            except Exception as ex:                  # noqa: BLE001
+                print("[WARN] 挪动 %s 失败（继续构建）：%s" % (z.name, ex), file=sys.stderr)
+        print("[INFO] 旧 ZIP %d 个已挪到 %s" % (len(old_zips), zip_dir))
 
 
 def build_all(specs: Sequence[SkillSpec], meta: ProjectMeta, root: Path,

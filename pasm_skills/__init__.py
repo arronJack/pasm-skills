@@ -26,7 +26,7 @@ entry points 组 `pasm_skills.agents`，或 `PASM_SKILLS_PATH` / `PASM_SKILLS_AG
 """
 from __future__ import annotations
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 
 from .agent import (  # noqa: F401
     AGENTS, FAIL, HOOKS, OK, SKIP, WARN,

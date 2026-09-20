@@ -2,6 +2,28 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.2] — 2026-09-20
+
+### 修复
+
+- **技能包构建：`clean_dist` 漏清根目录 ZIP**
+  它只把 `zip-root/` 与 `slug-dir/` 两个**目录**挪进 `_stale/`，
+  根目录下的上传用 ZIP（`<name>-<ver>.zip`）却原样留下 —— 新旧版本混在同一目录，
+  上传时极易拿错文件，是"发出去的还是上一版"的经典成因。
+  现在根目录 `*.zip` 会一并挪到 `_stale/zips-<时间戳>/`。
+
+## [0.5.1] — 2026-09-20
+
+### 变更 —— 应用框架独立成仓
+
+- 移除 `pasm_skills/framework` 子包，应用层（`BaseApplication` / `BaseSkill` /
+  `CapabilityDiscovery` / `DomainAdapter` / `CognitiveAssembler` / `CognitiveService` 等）
+  迁至独立仓 **pasm-framework**（`pip install pasm-framework`）。
+- 基座只保留引擎接线与 SDK：`BaseAgent`、`pasm_skills.sdk.backend` 的
+  `CognitiveBackend` 协议（**单一真相源仍在基座**）、`create_v1_backend` 等。
+- 依赖方向收敛为单向：`pasm-agents` → `pasm-framework` → `pasm-skills` → 引擎。
+  基座不再 import 任何应用层内容。
+
 ## [0.5.0] — 2026-09-15
 
 ### 新增 —— 认知能力层 `pasm_skills.cognition`（补齐四项长期短板）
