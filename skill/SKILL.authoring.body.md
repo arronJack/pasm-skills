@@ -5,6 +5,8 @@
 
 > 这是**基座**：它不提供成品智能体，只提供写智能体的能力。
 > 官方成品智能体（游戏 NPC / 老人陪伴 / 学习陪伴 / 长期验证）在独立公开仓 **pasm-agents**。
+> 写完智能体后要把它接成**完整应用 / 服务**（HTTP 接口、智能客服、站点嵌入、插件组合），
+> 那属于另一层 —— 用独立仓 **pasm-framework**（`pip install pasm-framework`）。
 
 ## 什么时候用
 
@@ -267,6 +269,9 @@ my-agents = "my_pkg.agents"
 ## 11. 相关
 
 - **pasm-agents**（独立公开仓）—— 官方成品智能体：游戏 NPC / 老人陪伴 / 学习陪伴 / 长期验证。**读它的源码是最好的教程。**
+- **pasm-framework**（独立公开仓）—— **应用框架**：把智能体接成完整应用的那一层
+  （插件子系统、HTTP 网关与流式输出、知识库自学、多语言客户端）。用 `from pasm_framework import SimpleApplication, capability` 三行起步。
+  见其 `docs/tutorials/`（9 篇，含站点智能客服、游戏 NPC、Web 部署）。
 - `docs/BUILD-AGENT.md` —— 手把手从零到发版
 - `docs/SKILL-FORMAT.md` —— 技能包格式与两种归档形态
 - `templates/` —— 可直接复制的智能体骨架与技能正文模板
