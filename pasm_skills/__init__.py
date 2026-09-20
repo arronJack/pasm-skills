@@ -8,6 +8,11 @@
    智能体基类 + 注册表、仓库隔离探测、场景仿真底座、核心契约检查工具箱；
 3. **打包**（`pasm_skills.build`）—— 把智能体打成平台可直接上传的技能包（两种归档形态）。
 
+> **应用开发框架已独立成仓**：`BaseApplication` / `CapabilityDiscovery` / `BaseSkill`
+> / `CognitiveAssembler` 等「产品应用」层已抽到独立包
+> [`pasm-framework`](https://gitee.com/arronzheng/pasm-framework)（pasm-framework>=0.1.0）。
+> 写产品智能体/应用请改用 `import pasm_framework`，本基座只保留 SDK / 验证器框架 / 打包库。
+
 三分钟上手：
 
     python -m pasm_skills selftest            # 自检（零依赖，随时可跑）
@@ -21,7 +26,7 @@ entry points 组 `pasm_skills.agents`，或 `PASM_SKILLS_PATH` / `PASM_SKILLS_AG
 """
 from __future__ import annotations
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 from .agent import (  # noqa: F401
     AGENTS, FAIL, HOOKS, OK, SKIP, WARN,
@@ -124,5 +129,10 @@ def selftest() -> bool:
 
     AGENTS.pop("_selftest_agent", None)
     AGENTS.pop("_selftest_boom", None)
+
+    # 注：应用开发框架（BaseApplication/CapabilityDiscovery/BaseSkill/...）已独立成仓
+    # pasm-framework（v0.1.0）。其表面由 pasm-framework 自带 selftest 与 pasm-agents 的
+    # surface-guard 共同守护，本基座 selftest 不再重复覆盖。
+
     print("pasm-skills selftest:", "通过" if ok else "失败")
     return ok

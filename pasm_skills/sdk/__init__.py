@@ -35,12 +35,17 @@ from __future__ import annotations
 from .base import (  # noqa: F401
     BaseAgent,
     AgentState,
+    _torch_available,
+)
+from .backend import (  # noqa: F401
+    CognitiveBackend,
+    create_v1_backend,
     _core_available,
     _now,
-    _torch_available,
 )
 
 __all__ = [
     "BaseAgent", "AgentState",
+    "CognitiveBackend", "create_v1_backend",
     "_core_available", "_now", "_torch_available",
 ]
