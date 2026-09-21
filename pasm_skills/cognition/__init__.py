@@ -24,11 +24,12 @@
 """
 from __future__ import annotations
 
-from . import capabilities, focus, forgetting, hub, semantic, text, tick, tools
+from . import capabilities, focus, forgetting, hub, relevance, semantic, text, tick, tools
 from .capabilities import (
     DEFAULT_ACTIONS, DEFAULT_PERSONA, FEEDBACK_KINDS,
     AgentRegistry, Capabilities, CapabilityAgent,
 )
+from .relevance import overlap, select_evidence, surface_of, tokens as rel_tokens, touches
 from .focus import FocusItem, FocusStack
 from .forgetting import (
     ArchiveStore, ConsolidationReport, Consolidator, ForgettingCurve,
@@ -48,6 +49,8 @@ __all__ = [
     # 能力门面（多个 surface 共用的唯一实现）
     "Capabilities", "AgentRegistry", "CapabilityAgent",
     "DEFAULT_ACTIONS", "DEFAULT_PERSONA", "FEEDBACK_KINDS",
+    # 相关性闸门（"这条资料够不够格当依据"）
+    "select_evidence", "touches", "surface_of", "overlap", "rel_tokens",
     # 语义
     "SemanticIndex", "SearchHit", "SynonymBridge",
     "EmbeddingBackend", "HashingBackend", "HttpEmbeddingBackend", "auto_backend",
