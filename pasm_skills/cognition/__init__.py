@@ -24,7 +24,11 @@
 """
 from __future__ import annotations
 
-from . import focus, forgetting, hub, semantic, text, tick, tools
+from . import capabilities, focus, forgetting, hub, semantic, text, tick, tools
+from .capabilities import (
+    DEFAULT_ACTIONS, DEFAULT_PERSONA, FEEDBACK_KINDS,
+    AgentRegistry, Capabilities, CapabilityAgent,
+)
 from .focus import FocusItem, FocusStack
 from .forgetting import (
     ArchiveStore, ConsolidationReport, Consolidator, ForgettingCurve,
@@ -41,6 +45,9 @@ from .tools import ToolRegistry, ToolResult, ToolSpec
 __all__ = [
     # 高层入口
     "enhance", "CognitionHub", "episodes_of", "episode_key",
+    # 能力门面（多个 surface 共用的唯一实现）
+    "Capabilities", "AgentRegistry", "CapabilityAgent",
+    "DEFAULT_ACTIONS", "DEFAULT_PERSONA", "FEEDBACK_KINDS",
     # 语义
     "SemanticIndex", "SearchHit", "SynonymBridge",
     "EmbeddingBackend", "HashingBackend", "HttpEmbeddingBackend", "auto_backend",
@@ -55,7 +62,7 @@ __all__ = [
     # 文本
     "normalize", "tokens", "bow", "cosine", "hash_embedding",
     # 子模块
-    "semantic", "forgetting", "focus", "tick", "tools", "text", "hub",
+    "semantic", "forgetting", "focus", "tick", "tools", "text", "hub", "capabilities",
 ]
 
 

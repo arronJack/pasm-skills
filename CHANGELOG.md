@@ -2,6 +2,34 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.0] — 2026-09-21
+
+把认知能力从"只有 MCP 能调"提升为**基座级的共享实现**，让 HTTP / 桌面 / 脚本
+等任意表面都能复用同一份逻辑。
+
+### 新增
+
+- **`pasm_skills.cognition.capabilities`** —— 认知能力门面（surface-agnostic）：
+  - `Capabilities`：13 个操作（`context` / `recall` / `semantic` / `focus` /
+    `status` / `observe` / `feel` / `act` / `feedback` / `consolidate` /
+    `chat` / `persona` / `save`），全部返回可直接 JSON 序列化的纯 dict。
+  - `AgentRegistry`：按 `agent_id` 管理实例，同 id 共享记忆 / 情绪 / 动作权重。
+  - `CapabilityAgent`：通用认知智能体（动作池 / 人格 / 渲染可配置）。
+  - **为什么收敛到基座**：这套语义此前只在 MCP 侧实现。当 HTTP 表面也要用时，
+    照抄一份就会产生**同源两份代码** —— 而本项目已经因为同源两份代码出过真实缺陷
+    （相关性闸门只回植了一边）。放在共同祖先层，两个表面都只是薄适配。
+- `tools/falsify_capabilities.py`：反例对照脚本。**"19 项全绿"不算数** ——
+  必须故意改坏还能被抓住。首次运行就抓出一条**假绿断言**：隔离检查原先写成
+  "两边互不包含"，注册表整体坏掉、两边都返回空列表时**照样通过**。
+
+### 修复
+
+- **`persona` 更新重启即丢**。基座 `BaseAgent._load_state` 刻意让 persona 以构造入参
+  为准（产品智能体的人格写在代码里，这是合理的）；但对**提供 persona 写入接口**的
+  表面就是名不副实：用户调了设置、看到成功，重启却变回默认值。
+  在 `AgentRegistry.get()` 里补上落盘读取（构造入参 > 上次落盘 > 默认），
+  **不动 BaseAgent**，因此不影响已发布的产品智能体。
+
 ## [0.5.2] — 2026-09-20
 
 ### 修复
