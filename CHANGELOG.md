@@ -2,6 +2,21 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.3] — 2026-09-29
+
+### 新增
+
+- **`sdk/backend.create_backend()` —— V2 探测工厂**（PASM v2.0 认知底座的接入点）。
+
+  选择优先级：显式参数 `backend_choice` → 环境变量 `PASM_BACKEND` → 默认 V1。
+  `PASM_BACKEND=v2` 且本机已装 `pasm2` 包时，返回 pasm2 的
+  `PasmV2CognitiveBackend`（实现同一 `CognitiveBackend` 协议，`isinstance` 实证为真）；
+  pasm2 未安装或构造失败 → **如实回退 V1**（不虚构 V2 能力）。
+
+  **零侵入承诺**：`create_v1_backend()` 与 `BaseAgent` 默认构造路径**逐字节不变**，
+  只有显式选择 V2 的调用方才走新路径，可独立回滚。pasm2 为**软依赖**（函数内惰性导入），
+  未安装 pasm2 的环境行为与 0.6.2 完全一致。
+
 ## [0.6.2] — 2026-09-21
 
 ### 新增
