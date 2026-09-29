@@ -329,3 +329,49 @@ def create_v1_backend(
         except Exception:
             pass
     return PasmV1LightBackend(persist_dir)
+
+
+# ============================================================ V2 探测工厂（2026-09-29）
+
+def _pasm2_available() -> bool:
+    """pasm2（V2.0 独立认知底座）是否可导入——软探测，绝不抛错。"""
+    import importlib.util
+    try:
+        return importlib.util.find_spec("pasm2") is not None
+    except Exception:
+        return False
+
+
+def create_backend(
+    persist_dir: "Path | str",
+    persona: Optional[dict] = None,
+    *,
+    use_core: bool = True,
+    stage: int = 0,
+    backend_choice: Optional[str] = None,
+) -> "CognitiveBackend":
+    """统一后端工厂：V1（默认）与 V2（pasm2）之间零侵入切换。
+
+    选择逻辑（优先级从高到低）：
+      1. 显式参数 ``backend_choice``（"v2" / "v1"）；
+      2. 环境变量 ``PASM_BACKEND``（"v2" → 用 pasm2；"v1"/空 → V1 路径）；
+      3. 默认 V1 —— **与既有 ``create_v1_backend`` 行为逐字节一致**。
+
+    V2 路径要求本机已安装 ``pasm2`` 包（``pip install pasm2`` 或源码可导入）；
+    选了 v2 但 pasm2 不可用 → 如实回退 V1 并在返回对象的 ``describe()`` /
+    ``counts()`` 里可查（诚实申报，不虚构 v2 能力）。
+
+    本函数**不改变** ``create_v1_backend``：BaseAgent 默认构造路径不变，
+    只有显式选择 V2 的调用方（MCP 开关 / 桌面实验开关 / 应用配置）才会走到
+    pasm2 —— 灰度可独立回滚。
+    """
+    choice = backend_choice or os.environ.get("PASM_BACKEND", "").strip().lower()
+    if choice in ("v2", "pasm2"):
+        if _pasm2_available():
+            try:
+                from pasm2.compat import make_backend as _v2_make
+                return _v2_make()          # brainwide 档；pasm2 侧自带诚实降级
+            except Exception:
+                pass                       # 构造失败 → 如实回退 V1
+    return create_v1_backend(persist_dir, persona,
+                             use_core=use_core, stage=stage)
