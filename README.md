@@ -21,18 +21,21 @@
 
 ---
 
-## 〇、PASM 生态索引（六仓同频）
+## 〇、PASM 生态索引（十一仓同频，2026-09-30 校准）
 
 PASM 不是一个仓，而是一套分层生态：
 
 | 仓 | 角色 | 可见性 | 版本 |
 |---|---|---|---|
-| **`pasm-skills`（本仓）** | **基座**：`BaseAgent` + 认知能力层 | 公开 | **0.5.0** |
-| `pasm-agents` | 成品智能体集（NPC / 陪伴 / 教学 / 验证） | 公开 | 0.4.9 |
-| `pasm-mcp-server` | MCP 接入层：给任意 AI 客户端装长期记忆 | 公开 | 0.2.0 |
-| `PASM-Lite` | 教学版 + 认知引擎接口 | 公开 | — |
-| `PASM` | 核心引擎（七层仿生 / 世界模型） | **私有** | 0.7.2 |
-| `pasm-qclaw` | 桌面应用发行通道 | 公开 | 0.30.2 |
+| `pasm2` | V2.0 独立认知底座（阶段 0-11：预测/记忆图/符号/双系统/量子/小脑/DMN/性格/LLM 桥，Alpha） | 公开 | 2.0.0a11 |
+| **`pasm-skills`（本仓）** | **基座：`BaseAgent` + 认知能力层 + `create_backend()` 探测工厂** | **公开** | **0.6.3** |
+| `pasm-framework` | 应用框架：HTTP 服务 / 路由 / 插件 + `CognitiveAssembler.v1()/v2()` | 公开 | 0.5.4 |
+| `pasm-agents` | 成品智能体集（NPC / 陪伴 / 教学 / 客服 / 验证） | 公开 | 0.5.0 |
+| `pasm-mcp-server` | MCP 接入层：给任意 AI 客户端装长期记忆（`PASM2=1` 切 V2） | 公开 | 0.2.1 |
+| `pasm-domain-advisor` · `pasm-medical` · `pasm-customer-service` | 领域智能体：领域顾问引擎 / 医疗辅助 / 专业客服 | 公开 | 0.1.1 · 0.1.0 · 0.2.0 |
+| `PASM-Lite` | 教学版 + 认知引擎接口（不接 V2，保持纯净） | 公开 | — |
+| `PASM` | 核心引擎（七层仿生 / 世界模型，含 `pasm2/`；桌面源码 0.31.16） | 私有 | 0.7.2 |
+| `pasm-qclaw` | 桌面应用发行通道（安装包 + `latest.json` 升级源） | 公开 | 0.31.15（已发行） |
 
 流向：`PASM`（核心）→ `pasm-skills`（基座）→ `pasm-agents`（智能体）→
 `pasm-mcp-server`（分发）→ `pasm-qclaw`（桌面产品）；`PASM-Lite` 是面向外界的教学窗口。
