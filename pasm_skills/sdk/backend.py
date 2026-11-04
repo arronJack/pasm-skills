@@ -20,6 +20,7 @@ V2 落地时只需新增 `PasmV2Backend`（实现同一 `CognitiveBackend` 协�
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import random
@@ -83,8 +84,15 @@ class PasmV1CoreBackend:
     is_core = True
 
     def __init__(self, memory_layers, learning,
-                 persona: Optional[dict] = None, stage: int = 0):
+                 persona: Optional[dict] = None, stage: int = 0, *,
+                 data_dir: Optional[str] = None):
         self._mem = memory_layers
+        # ★ memory_layers 是**模块级单例**：DATA_DIR / EPI_FILE 全是全局变量，
+        #   create_v1_backend() 每建一个 agent 就 set_data_dir() 覆盖一次。
+        #   所以 backend 必须记住"我落在哪个目录"，并在每次记忆操作前切回来；
+        #   否则同一进程里多 agent（例如多患者）会互相读到对方的记忆 ——
+        #   在医疗场景这不是"串味"，是**跨患者数据泄露**。
+        self._data_dir = str(data_dir or getattr(memory_layers, "DATA_DIR", "") or "")
         # ⚠ 核心 LearningEngine 的参数名是 **data_path**，不是 data_dir。
         # 曾经写成 data_dir：构造时 TypeError，被 `except Exception` 静默吞掉，
         # 结果"永远启用不了核心档"——而且失败得毫无痕迹。别再改回去。
@@ -106,6 +114,35 @@ class PasmV1CoreBackend:
         except Exception:
             self.emotion_system = None
 
+    # ---- 模块单例作用域（★ 多 agent 隔离的关键） ----
+
+    def _scope(self) -> None:
+        """把模块级 ``DATA_DIR`` 切回**本 agent** 的目录。
+
+        ★ 为什么必须有这一步：``memory_layers`` 的 ``episodes()`` / ``episode_push()``
+        读写的都是**全局** ``EPI_FILE``，而该全局量由最后一次 ``set_data_dir()`` 决定。
+        多 agent 同进程时，后建的 agent 会把全局量改成自己的，先建的就读到了后来者的记忆。
+        """
+        if not self._data_dir:
+            return
+        target = os.path.abspath(self._data_dir)
+        current = str(getattr(self._mem, "DATA_DIR", "") or "")
+        if not current or os.path.abspath(current) != target:
+            self._mem.set_data_dir(target)
+
+    def _lock(self):
+        """记忆模块自带的 RLock（可重入）；拿不到时退化为无锁上下文。"""
+        return getattr(self._mem, "_lock", None) or contextlib.nullcontext()
+
+    def _episodes_scoped(self) -> List[Dict[str, Any]]:
+        """带作用域地读情景记忆（供 hub.episodes_of 调用）。"""
+        with self._lock():
+            self._scope()
+            try:
+                return self._mem.episodes()
+            except Exception:
+                return []
+
     # ---- 学习层设计（动作池随成长阶段变化，变了就重新 design） ----
 
     def _ensure_design(self, pool: List[str], persona=None, stage=None) -> None:
@@ -121,10 +158,12 @@ class PasmV1CoreBackend:
     def episode_push(
         self, *, title, brief, tags, category, salience,
     ) -> None:
-        self._mem.episode_push(
-            title=title, brief=brief, tags=tags,
-            cat=category, salience=salience,
-        )
+        with self._lock():
+            self._scope()
+            self._mem.episode_push(
+                title=title, brief=brief, tags=tags,
+                cat=category, salience=salience,
+            )
 
     def recall(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """跨层检索，返回情景记忆命中列表（与 light 档同契约：[{title, brief, tags, sal, ...}]）。
@@ -137,18 +176,20 @@ class PasmV1CoreBackend:
         q = (query or "").strip()
         if not q:
             return []
-        try:
-            scored = []
-            for e in self._mem.episodes():
-                hay = (e.get("title", "") + " " + " ".join(e.get("tags", []))
-                       + " " + e.get("brief", ""))
-                sc = self._mem._score(q, hay)
-                if sc > 0:
-                    scored.append((sc, e))
-            scored.sort(key=lambda x: x[0], reverse=True)
-            return [dict(e) for _, e in scored[:k]]
-        except Exception:
-            return []
+        with self._lock():
+            self._scope()
+            try:
+                scored = []
+                for e in self._mem.episodes():
+                    hay = (e.get("title", "") + " " + " ".join(e.get("tags", []))
+                           + " " + e.get("brief", ""))
+                    sc = self._mem._score(q, hay)
+                    if sc > 0:
+                        scored.append((sc, e))
+                scored.sort(key=lambda x: x[0], reverse=True)
+                return [dict(e) for _, e in scored[:k]]
+            except Exception:
+                return []
 
     def learn_pick(self, candidates: List[str], base=None,
                    persona=None, stage=None) -> str:
@@ -172,11 +213,21 @@ class PasmV1CoreBackend:
     def feedback(self, kind: str, action: Optional[str] = None) -> Dict[str, float]:
         return self._learning.feedback(kind, lr=0.25, action=action)
 
+    def episodes(self) -> List[Dict[str, Any]]:
+        """带作用域的情景记忆读取。
+
+        ★ ``hub.episodes_of()`` 会优先调这里。以前它直接读模块的 ``episodes()``，
+          拿到的是「最后一次 set_data_dir 的那个 agent」的目录 —— 多 agent 时串记忆。
+        """
+        return self._episodes_scoped()
+
     def counts(self) -> Dict[str, int]:
-        try:
-            return self._mem.counts() or {}
-        except Exception:
-            return {}
+        with self._lock():
+            self._scope()
+            try:
+                return self._mem.counts() or {}
+            except Exception:
+                return {}
 
 
 # ============================================================ V1 轻量后端
@@ -324,8 +375,11 @@ def create_v1_backend(
         try:
             from pasm.cognitive import memory_layers, learning  # type: ignore
             memory_layers.set_data_dir(str(persist_dir))
+            # ★ 必须把本 agent 的目录一并交给 backend：模块级 DATA_DIR 会被
+            #   后续创建的 agent 覆盖，backend 要靠 data_dir 在每次操作前切回来。
             return PasmV1CoreBackend(
-                memory_layers, learning, persona=persona, stage=stage)
+                memory_layers, learning, persona=persona, stage=stage,
+                data_dir=str(persist_dir))
         except Exception:
             pass
     return PasmV1LightBackend(persist_dir)

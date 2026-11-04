@@ -54,6 +54,15 @@ def episodes_of(agent: Any) -> List[Dict[str, Any]]:
     eps = getattr(core, "_episodes", None)
     if isinstance(eps, list):
         return [e for e in eps if isinstance(e, dict)]
+    # ★ 优先走 backend 的**带作用域**入口：core 后端的 ``_mem`` 是模块单例，
+    #   直接读会拿到「最后一次 set_data_dir 的那个 agent」的目录 ——
+    #   同进程多 agent 时会读到别人的记忆（医疗场景 = 跨患者泄露）。
+    fn = getattr(core, "episodes", None)
+    if callable(fn):
+        try:
+            return [e for e in fn() if isinstance(e, dict)]
+        except Exception:
+            pass
     mem = getattr(core, "_mem", None)
     fn = getattr(mem, "episodes", None)
     if callable(fn):
