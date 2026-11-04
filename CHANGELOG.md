@@ -2,6 +2,23 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.4] — 2026-11-04
+
+### 修复
+
+- **core 后端跨 agent 记忆串号（患者隔离失守）**：`PasmV1CoreBackend` 持有模块单例
+  `memory_layers`，`DATA_DIR` / `EPI_FILE` 是全局变量，`create_v1_backend()` 每建一个
+  agent 就 `set_data_dir()` 覆盖一次。后果：先建的 agent 在后续召回时读到**后建者**的
+  记忆（医疗场景 = 跨患者数据泄露），且不报错。
+  修法：backend 记住自身 `data_dir`，每次记忆操作前用模块 `RLock` 切回；
+  `episode_push` / `recall` / `counts` / 新增 `episodes()` 全部走作用域；
+  `create_v1_backend()` 传递 `data_dir`；`hub.episodes_of()` 优先调 `core.episodes()`。
+
+### 兼容性
+
+- 纯 bug fix，API 与默认行为不变；单 agent 场景无感知。
+- 多 agent 同进程场景下，隔离从"碰运气"变为确定成立（RLock 串行化切换）。
+
 ## [0.6.3] — 2026-09-29
 
 ### 新增
