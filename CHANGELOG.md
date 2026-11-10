@@ -2,6 +2,27 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.5] — 2026-11-10
+
+### 修复
+
+- **反馈被静默吞掉（"夸了它但行为一点没变"）**：`BaseAgent.feedback()` 把
+  `kind`/`action` 直接丢给后端；而此时**动作池往往还没 design** →
+  学习层权重表是空的 → `LearningEngine.feedback()` 返回 `{}` →
+  反馈只进了 `feedback_history`，**从未影响行为**。
+  修法：反馈前先 `_ensure_design(self.action_pool())`
+  （动作池是子类概念，只有 BaseAgent 知道），再委派后端。
+  → MCP 自检「pasm_feedback 作用于指定动作」由红转绿。
+- **后端状态不落盘**：`BaseAgent.save()` 现在调用后端 `save()`、
+  `__init__` 调用后端 `load()`（都 try/except，失败不影响起服务）。
+  `create_backend()` 把 `persist_dir` 传给 V2 后端 → V2 认知状态可跨重启续跑
+  （此前 V2 只活在内存里，重启即失忆，比 V1 还差）。
+
+### 兼容性
+
+- 纯 bug fix：默认后端仍是 V1（`PASM_BACKEND=v2` 才走 V2）；
+  V1 路径除"反馈现在真的生效"外行为不变。
+
 ## [0.6.4] — 2026-11-04
 
 ### 修复

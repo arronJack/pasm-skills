@@ -424,7 +424,14 @@ def create_backend(
         if _pasm2_available():
             try:
                 from pasm2.compat import make_backend as _v2_make
-                return _v2_make()          # brainwide 档；pasm2 侧自带诚实降级
+                try:
+                    # 传 persist_dir → V2 认知状态落盘（跨进程/跨重启续跑）。
+                    # 不传的话 V2 只活在内存里，重启即失忆 —— 比 V1 还差，
+                    # 那样就不配当默认后端。
+                    return _v2_make(persist_dir=str(Path(persist_dir)))
+                except TypeError:
+                    # 旧版 pasm2 不认 persist_dir → 无参构造（落盘能力缺失，诚实降级）
+                    return _v2_make()
             except Exception:
                 pass                       # 构造失败 → 如实回退 V1
     return create_v1_backend(persist_dir, persona,

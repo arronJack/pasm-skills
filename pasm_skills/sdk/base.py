@@ -115,6 +115,14 @@ class BaseAgent:
             self.persist_dir, self.persona, use_core=use_core, stage=0
         )
         self._core_ok = bool(getattr(self._core, "is_core", False))
+        # 后端自身状态的恢复（V2 后端把认知状态存在 persist_dir 下；
+        # V1 后端自己管数据目录，不需要额外调用）。失败即跳过 —— 绝不让智能体起不来。
+        _core_load = getattr(self._core, "load", None)
+        if callable(_core_load):
+            try:
+                _core_load()
+            except Exception:
+                pass
 
         # 情绪系统由后端提供（None 表示走轻量情绪兜底）
         self._emo = getattr(self._core, "emotion_system", None)
@@ -252,6 +260,23 @@ class BaseAgent:
         # 轻量后端（PasmV1LightBackend）同样有 feedback 实现，挡掉就等于
         # "记录了一次反馈，但行为永远不变"。
         if hasattr(self._core, "feedback"):
+            # ★ 反馈前先把动作池 design 出来。
+            #   否则学习层权重表是空的 → LearningEngine.feedback 直接返回 {}，
+            #   反馈被静默吞掉，表现为「夸了它但行为一点没变」——
+            #   这正是 MCP 自检红「pasm_feedback 作用于指定动作」的根因。
+            #   action_pool 由子类给出（成长阶段解锁的动作），这里是唯一知道它的地方。
+            ensure = getattr(self._core, "_ensure_design", None)
+            if callable(ensure):
+                try:
+                    pool = list(self.action_pool())
+                except Exception:
+                    pool = []
+                if pool:
+                    try:
+                        ensure(pool, persona=self.persona,
+                               stage=getattr(self.state, "growth_stage", 0))
+                    except Exception:
+                        pass
             try:
                 return self._core.feedback(kind, action=action)
             except Exception:
@@ -325,6 +350,13 @@ class BaseAgent:
         )
         # 用 rename 替代直接覆盖，避免半写文件
         os.replace(tmp, out)
+        # 后端自身状态（V2 认知状态：记忆图/自传体/情绪…）一并落盘
+        _core_save = getattr(self._core, "save", None)
+        if callable(_core_save):
+            try:
+                _core_save()
+            except Exception:
+                pass
         return out
 
     def _load_state(self) -> AgentState:
