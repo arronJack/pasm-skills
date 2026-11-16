@@ -2,6 +2,24 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.6] — 2026-11-16
+
+### 修复（关键事实护城河）
+
+- **`CognitionHub.recall()` 显著度/时间/分类三字段全丢**：`reindex()` 通过
+  `SemanticIndex.add(meta={sal,ts,cat})` 写入时，这三个字段落在**第二层**
+  `h.meta["meta"]`（title/text/tags 在外层），但 `recall()` 只取外层
+  `meta.get("sal"/"ts"/"cat")` → None → sal 恒 1、ts 恒 0、cat 恒空。后果：
+  **显著度排序退化成召回顺序（关键事实护城河失效）、遗忘曲线失效、分类过滤失效**。
+  修法：内层优先、外层回退（兼容手工扁平 meta / 旧索引）。
+- 验证：`pasm-skills selftest` 通过；MCP `--selftest` 通过、A/B 全绿；
+  `PASM/analysis/tools/phase12_salience_moat_probe.py` 升级为修复守门
+  （CF1 端到端 sal 保真 / CF2 内层取值 / CF3 排序反事实 全 PASS）。
+
+### 兼容性
+
+- 纯 bug fix：默认后端不变；显著度现在真实生效，召回排序会更偏向高重要度记忆。
+
 ## [0.6.5] — 2026-11-10
 
 ### 修复

@@ -219,13 +219,22 @@ class CognitionHub:
             if self.archive.is_hidden(h.key):
                 continue
             meta = h.meta or {}
+            # reindex() 通过 SemanticIndex.add(meta={...}) 写入的 sal/ts/cat 落在
+            # **第二层** meta["meta"]（SemanticIndex.add 把 title/text/tags 放外层、
+            # meta 整体塞进 "meta" 键）。此前这里只取外层 → sal/ts/cat 全部丢失：
+            # sal 恒 1（显著度排序退化成召回顺序、关键事实护城河失效）、
+            # ts 恒 0（遗忘曲线失效）、cat 恒空（分类过滤失效）。
+            # 兼容：内层优先，回退外层（手工构造的扁平 meta / 旧索引仍能读）。
+            inner = meta.get("meta") or {}
+            if not isinstance(inner, dict):
+                inner = {}
             rec = {
                 "title": meta.get("title") or "",
                 "brief": meta.get("text") or "",
                 "tags": meta.get("tags") or [],
-                "sal": meta.get("sal") or 1,
-                "ts": meta.get("ts") or 0.0,
-                "cat": meta.get("cat") or "",
+                "sal": inner.get("sal") or meta.get("sal") or 1,
+                "ts": inner.get("ts") or meta.get("ts") or 0.0,
+                "cat": inner.get("cat") or meta.get("cat") or "",
                 "hits": self._rehearsal.get(h.key, 0),
                 "_key": h.key,
             }
