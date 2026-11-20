@@ -27,6 +27,17 @@ def _now() -> float:
     return time.time()
 
 
+def _ts(value: Any, default: float = 0.0) -> float:
+    """宽容解析 ts（数字 / 数字串 / 可读时间）；局部导入避免与 hub 循环依赖。
+
+    0.6.8：本模块原先在 strength()/decay_report()/anchor 三处直接 ``float(ts)``，
+    V1 记忆层写可读时间字符串时会抛 ValueError —— 0.6.7 只修了 hub.recall，
+    这三处是漏网点。统一改走这里。
+    """
+    from .hub import _to_epoch
+    return _to_epoch(value, default)
+
+
 # ============================================================ 遗忘曲线
 
 @dataclass
@@ -75,7 +86,7 @@ class ForgettingCurve:
         重要度本身也参与排序 —— 重要的旧事仍然排在不重要的新事前面。
         """
         now = _now() if now is None else now
-        ts = float(rec.get("ts") or rec.get("time") or 0.0) or now
+        ts = _ts(rec.get("ts") or rec.get("time") or 0.0) or now
         sal = int(rec.get("sal") or rec.get("salience") or 1)
         reh = int(rec.get("hits") or rec.get("rehearse") or 0)
         base = self.retention(max(0.0, now - ts), sal, reh)
@@ -87,7 +98,7 @@ class ForgettingCurve:
         now = _now() if now is None else now
         if not episodes:
             return {"count": 0, "avg_retention": 0.0, "faded": 0, "strong": 0}
-        rets = [self.retention(max(0.0, now - float(e.get("ts") or now)),
+        rets = [self.retention(max(0.0, now - _ts(e.get("ts") or now)),
                                int(e.get("sal") or 1),
                                int(e.get("hits") or 0)) for e in episodes]
         return {
@@ -188,6 +199,7 @@ class Consolidator:
         sim_fn   : ``(i, j) -> float`` 相似度函数；不传则退化为"标题完全相同"
         """
         now = _now() if now is None else now
+        # ★ 0.6.8：anchor 与 newest 两处都走宽容解析，原 anchor 的 float() 是 0.6.7 漏网点。
         rep = ConsolidationReport(scanned=len(episodes))
         if not episodes:
             return rep
@@ -210,12 +222,20 @@ class Consolidator:
             if len(cluster) < self.min_group:
                 continue
             rep.groups += 1
-            # 代表性条目 = 重要度最高，其次最新
+            # 重要度代表 = 重要度最高，其次最新（只用于 sal / category 基线）
             anchor = max(cluster, key=lambda i: (
                 int(episodes[i].get("sal") or 1),
-                float(episodes[i].get("ts") or 0.0),
+                _ts(episodes[i].get("ts"), 0.0),
             ))
             a = episodes[anchor]
+            # ★ 内容源 = **最新**一条（0.6.8 修复）。
+            #   原实现取 briefs[-1]，而核心记忆层用 insert(0) 保证存储顺序「新→旧」，
+            #   于是 [-1] 恒为最旧 → 巩固把用户最新的修正（日期/地址/价格）弄丢，
+            #   标题却来自 anchor（可能更新）→ 标题正文不同源，合成出"新标题+旧内容"。
+            #   现在 title/brief 都取自 newest，保证同源且取到当前有效值。
+            #   ts 可能是可读时间字符串，复用 hub 的宽容解析器（已在 plan 顶部导入）。
+            newest = max(cluster, key=lambda i: _ts(episodes[i].get("ts"), 0.0))
+            src = episodes[newest]
             tags: List[str] = []
             for i in cluster:
                 for t in (episodes[i].get("tags") or []):
@@ -229,13 +249,13 @@ class Consolidator:
                 t = str(episodes[i].get("title", "")).strip()
                 if t and t not in titles:
                     titles.append(t)
-            briefs = [str(episodes[i].get("brief", "")).strip()
-                      for i in cluster]
-            briefs = [b for b in briefs if b]
+            # 旧实现在此收集全部 brief 并取 briefs[-1]；0.6.8 起内容源改为 newest，
+            # 故不再需要这份列表（保留 titles 仅用于 gist 的多标题摘要）。
             gist = {
-                "title": f"巩固：{a.get('title', ' recurring')}",
+                # title/brief 同源（都来自最新条目），避免"新标题 + 旧内容"
+                "title": f"巩固：{src.get('title', ' recurring')}",
                 "brief": (("、".join(titles[:5])) + "。" +
-                          (briefs[-1][:120] if briefs else "")),
+                          (str(src.get("brief") or "").strip()[:120])),
                 "tags": tags[:12],
                 "sal": min(5, int(a.get("sal") or 1) + 1),
                 "category": str(a.get("cat") or a.get("category") or "巩固"),

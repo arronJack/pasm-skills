@@ -214,6 +214,44 @@ def _selftest() -> int:  # noqa: C901 - 自检就是要平铺直叙
     check("巩固产出要点且重要度提升",
           bool(rep.gists) and rep.gists[0]["sal"] > 2)
 
+    # ---------- 7b. 0.6.8 回归守门：巩固必须保留**最新**版本，不是最旧
+    #   背景：核心记忆层 insert(0) ⇒ 存储顺序「新→旧」，旧代码取 briefs[-1] 恒得最旧，
+    #   用户改过的日期/地址会被巩固回退。这里用显式 ts 钉住，防止再改回去。
+    _updates = [
+        {"title": "交作业日期", "brief": "第三章习题 10月21日 交", "tags": ["作业"],
+         "sal": 2, "ts": now},
+        {"title": "交作业日期", "brief": "第三章习题 10月19日 交", "tags": ["作业"],
+         "sal": 2, "ts": now - 600},
+        {"title": "交作业日期", "brief": "第三章习题 10月17日 交", "tags": ["作业"],
+         "sal": 2, "ts": now - 1200},
+        {"title": "交作业日期", "brief": "第三章习题 10月15日 交", "tags": ["作业"],
+         "sal": 2, "ts": now - 1800},
+    ]
+    _rep_u = Consolidator(similarity=0.9, min_group=3).plan(
+        _updates, sim_fn=lambda i, j: 1.0)
+    _gist = _rep_u.gists[0]["brief"] if _rep_u.gists else ""
+    check("★ 巩固保留最新日期而非最旧（0.6.8 回归守门）",
+          "10月21日" in _gist and "10月15日" not in _gist, _gist)
+    _old_style = "、".join([e["title"] for e in _updates][:5]) + "。" + \
+        [e["brief"] for e in _updates][-1][:120]
+    check("★ 负对照：旧取法 briefs[-1] 确实拿到最旧日期（断言非恒绿）",
+          "10月15日" in _old_style and "10月21日" not in _old_style)
+
+    # ---------- 7c. 0.6.8：巩固遇到「可读时间 ts」不崩（0.6.7 漏网）
+    _readable = [
+        {"title": "日程变更", "brief": f"第{i}版 10月2{i}日", "tags": ["日程"],
+         "sal": 2, "ts": f"2026-11-20 1{i}:00"}
+        for i in range(3)
+    ]
+    try:
+        _rep_r = Consolidator(similarity=0.9, min_group=3).plan(
+            _readable, sim_fn=lambda i, j: 1.0)
+        _ok_r = bool(_rep_r.gists) and "第2版" in _rep_r.gists[0]["brief"]
+    except Exception as _e:
+        _ok_r = False
+        print("  readable-ts consolidate error:", _e)
+    check("★ 巩固可读时间 ts 不崩且取最新（0.6.7 漏网修复）", _ok_r)
+
     # ---------- 8. 端到端：接到真 BaseAgent
     class _Probe(BaseAgent):
         def action_pool(self):
