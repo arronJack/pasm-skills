@@ -255,7 +255,8 @@ class CognitionHub:
 
     def recall(self, query: str, k: int = 5, *,
                use_focus: bool = True, use_forgetting: bool = True,
-               min_score: float = 0.03) -> List[Dict[str, Any]]:
+               min_score: float = 0.03,
+               min_relevance: float = 0.0) -> List[Dict[str, Any]]:
         """认知检索：**语义 + 保留度 + 重要度 + 焦点** 四路融合。
 
         与 ``BaseAgent.recall`` 的差别
@@ -264,6 +265,26 @@ class CognitionHub:
         - 保留度：走 :class:`ForgettingCurve`，久未唤起的记忆自然降权
         - 焦点：当前话题涉及的实体获得加权（解决长对话跑题）
         - 复习：命中的记忆会累加 ``hits``，下次半衰期变长（复习效应）
+
+        ``min_relevance``（可选相关性闸门）
+        ----------------------------------
+        融合分里的 ``retention/salience`` 是**常驻基线**，语义为 0 时仍非零，
+        因此 ``min_score`` 无法拦截"无关查询也返回具体事实"。本闸门改用
+        **top1 语义分领先候选均值的幅度**（后端无关的相对量）：
+
+            signal = sem_top1 - mean(所有候选的 semantic)
+
+        设 >0 时，signal 低于该值的命中被滤除；返回空列表是**有效结论**（
+        "没有能支撑这个问题的记忆"），调用方应据此如实告知而非编造。
+        默认 0.0 = 不启用，避免误杀（离线 hashing 后端语义噪声大，实测
+        单一阈值 AUC 最高仅 0.935，不做硬编码默认值）。
+
+        ⚠️ 阈值不可移植：signal 依赖**候选池规模与 k**（候选越多、越同质，
+        相关项的 signal 越小）。同一阈值在小语料上能干净分离、在大语料上
+        可能大面积误杀。部署方必须用 **与自己后端/语料/k 相同口径** 标定，
+        参见 analysis/tools/gate_full_features.py 与 relevance_gate_verify.py。
+        实测 hashing 后端：k=5、0.15 阈值可拦住全部无关查询，但误杀约
+        45% 相关；这是离线语义退化的表现，嵌入后端预期显著改善（未实测）。
         """
         self.reindex()
         q = (query or "").strip()
@@ -336,6 +357,19 @@ class CognitionHub:
             seen.add(sig)
             deduped.append(r)
         top = deduped[: max(1, int(k))]
+        # ---- 可选相关性闸门（min_relevance > 0 时启用） ----
+        # signal = top1 语义分 - 本批命中语义分均值（后端无关的相对量）。
+        # 与 `relevance_gate_calibrate` 的口径一致：都用 recall 最终返回的
+        # 这批命中算 mean，阈值由调用方按自己后端标定，引擎不硬编码。
+        sem_vals = [float(r.get("semantic") or 0.0) for r in top]
+        sem_mean = (sum(sem_vals) / len(sem_vals)) if sem_vals else 0.0
+        signal = (max(sem_vals) - sem_mean) if sem_vals else 0.0
+        for r in top:
+            r["relevance"] = round(float(r.get("semantic") or 0.0) - sem_mean, 4)
+        if min_relevance > 0 and signal < min_relevance:
+            # 无能支撑此问题的记忆 —— 返回空是有效结论，且**不产生**
+            # 复习效应/焦点更新（无关查询不该强化任何记忆或带偏焦点）。
+            return []
         # 复习效应：命中一次，半衰期变长
         for r in top:
             key = r["_key"]

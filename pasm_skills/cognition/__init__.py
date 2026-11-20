@@ -277,6 +277,24 @@ def _selftest() -> int:  # noqa: C901 - 自检就是要平铺直叙
         check("端到端：命中后产生复习效应",
               sum(cog._rehearsal.values()) >= 1)
 
+        # 相关性闸门（可选，默认关；此处显式开启验证行为）
+        # 注：0.15 是本自检小语料（4 条）的标定值，仅证明机制生效；
+        #     真实语料阈值必须自标定（见 hub.recall 文档警告）。
+        rel_hit = cog.recall("我叫什么名字", k=4, min_relevance=0.15)
+        check("★ 闸门：相关查询不被误杀",
+              bool(rel_hit) and "小明" in (rel_hit[0].get("brief") or ""),
+              f"实际：{[g.get('title') for g in rel_hit]}")
+        rel_miss = cog.recall("量子纠缠的原理", k=4, min_relevance=0.15)
+        check("★ 闸门：无关查询返回空（不再编造记忆）",
+              rel_miss == [], f"实际：{[g.get('title') for g in rel_miss]}")
+        default_hit = cog.recall("量子纠缠的原理", k=4)
+        check("★ 默认不门控（向后兼容）：无关查询仍返回候选",
+              len(default_hit) >= 1, f"实际 {len(default_hit)} 条")
+        check("★ 负对照：旧取法 signal 阈值 0.99 会误杀（断言非恒绿）",
+              cog.recall("我叫什么名字", k=4, min_relevance=0.99) == [])
+        check("命中带 relevance 相对置信度字段",
+              all("relevance" in g for g in rel_hit))
+
         # 巩固（真落盘）
         for i in range(3):
             cog.observe(f"练习记录{i}", "三角函数 练习 错题", tags=["数学"], salience=2)
