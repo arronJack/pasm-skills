@@ -35,6 +35,7 @@ from .forgetting import (
     ArchiveStore, ConsolidationReport, Consolidator, ForgettingCurve,
 )
 from .hub import CognitionHub, enhance, episode_key, episodes_of
+from .hub import _to_epoch                     # 自检用（ts 类型容错，0.6.7）
 from .semantic import (
     EmbeddingBackend, HashingBackend, HttpEmbeddingBackend, SearchHit,
     SemanticIndex, SynonymBridge, auto_backend,
@@ -125,6 +126,44 @@ def _selftest() -> int:  # noqa: C901 - 自检就是要平铺直叙
     check("复习延长记忆",
           curve.retention(86400 * 20, 1, 3) > curve.retention(86400 * 20, 1, 0))
     check("保留度有下限（不会彻底消失）", curve.retention(86400 * 3650, 1, 0) > 0)
+
+    # ---------- 3b. ts 类型容错（0.6.7：修 0.6.6 的召回崩溃）
+    #   ★★ 0.6.6 曾直接 float(rec["ts"])，而 V1 记忆层写的是可读时间字符串
+    #      → ValueError → **召回整条链路崩掉**。这里是那次的回归守门。
+    import time as _time
+    _epoch = 1795154760.0                                     # 2026-11-20 14:06 本地
+    check("ts 容错：float 原样",
+          _to_epoch(1732082760.5) == 1732082760.5)
+    check("ts 容错：int 转 float",
+          _to_epoch(1732082760) == 1732082760.0
+          and isinstance(_to_epoch(1732082760), float))
+    check("ts 容错：数字字符串",
+          _to_epoch("1732082760.5") == 1732082760.5)
+    check("ts 容错：可读时间（分钟精度）",
+          abs(_to_epoch("2026-11-20 14:06") - _epoch) < 1,
+          str(_to_epoch("2026-11-20 14:06")))
+    check("ts 容错：可读时间（秒精度）",
+          abs(_to_epoch("2026-11-20 14:06:30") - (_epoch + 30)) < 1)
+    check("ts 容错：可读日期",
+          _to_epoch("2026-11-20") > 0)
+    check("ts 容错：斜杠格式",
+          abs(_to_epoch("2026/11/20 14:06") - _epoch) < 1)
+    check("ts 容错：ISO 格式",
+          abs(_to_epoch("2026-11-20T14:06:30") - (_epoch + 30)) < 1)
+    check("ts 容错：None/空串/垃圾 → 默认值（不抛异常）",
+          _to_epoch(None) == 0.0 and _to_epoch("") == 0.0
+          and _to_epoch("garbage") == 0.0 and _to_epoch("  ") == 0.0)
+    check("ts 容错：bool 不被当数字（True 不等于 1.0 秒）",
+          _to_epoch(True) == 0.0 and _to_epoch(False) == 0.0)
+    # ★★ 负对照：证明上面的断言非恒绿 —— 旧写法 float() 对可读时间必然抛异常。
+    #    若哪天有人把 _to_epoch 换回 float()，这条会立刻红。
+    _old_style_crashed = False
+    try:
+        float("2026-11-20 14:06")
+    except ValueError:
+        _old_style_crashed = True
+    check("★ 负对照：旧写法 float(可读时间) 确实抛异常（断言非恒绿）",
+          _old_style_crashed)
 
     # ---------- 4. 焦点栈
     fs = FocusStack(half_life=600.0, max_items=4)

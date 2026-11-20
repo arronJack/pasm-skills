@@ -42,6 +42,59 @@ def _now() -> float:
     return time.time()
 
 
+#: 可读时间的常见格式（按出现概率排序）。``_to_epoch`` 宽容解析用。
+_TS_FORMATS = (
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d",
+    "%Y/%m/%d %H:%M:%S",
+    "%Y/%m/%d %H:%M",
+    "%Y/%m/%d",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%f",
+)
+
+
+def _to_epoch(value: Any, default: float = 0.0) -> float:
+    """把各种形态的 ``ts`` 归一成 epoch 秒（float）。**绝不抛异常。**
+
+    ★★ 为什么必须容错 —— 0.6.6 的 P0 回归教训（2026-11-20）
+    ------------------------------------------------------
+    0.6.6 修了"recall 从内层 meta 取 sal/ts/cat"（提交 6240ea0）：取值层级修对了，
+    但**没校验值类型**，直接 ``float(rec["ts"])``。
+    而 V1 记忆层写入的 episode 里 ``ts`` 是**可读时间字符串**（``'2026-11-20 14:06'``），
+    于是 ``float()`` 抛 ``ValueError`` → **召回整条链路崩掉**（不是降级，是抛异常）。
+    该版本已发 PyPI/三端，用 V1 backend 且有记忆的用户一召回就崩。
+
+    **根因是类型假设**：轻量档写 epoch float、核心档（V1）写可读时间，
+    中枢作为跨档位共享的读取路径，不能假设上游字段类型一致。
+
+    接受：``int`` / ``float``（epoch 秒）/ 数字串 / 可读时间串（多种格式）。
+    其余（``None`` / 空串 / 无法解析）→ 返回 ``default``。
+    遗忘曲线拿不到准确时间最多是"衰减算得不准"，**不该让召回整体失败** ——
+    「算不准」和「功能不可用」是两个量级的后果。
+
+    ⚠️ ``bool`` 要排除：它是 ``int`` 子类，不排除会把 ``True`` 当 1.0 秒。
+    """
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value or "").strip()
+    if not s:
+        return default
+    try:
+        return float(s)                      # 数字串（"1732082760.0"）
+    except ValueError:
+        pass
+    for fmt in _TS_FORMATS:
+        try:
+            return time.mktime(time.strptime(s, fmt))
+        except ValueError:
+            continue
+    return default
+
+
 def episodes_of(agent: Any) -> List[Dict[str, Any]]:
     """从 BaseAgent 里取出记忆条目列表（跨档位）。
 
@@ -174,7 +227,12 @@ class CognitionHub:
                 title=str(rec.get("title") or ""),
                 text=str(rec.get("brief") or rec.get("text") or ""),
                 tags=list(rec.get("tags") or []),
-                meta={"sal": rec.get("sal"), "ts": rec.get("ts"),
+                meta={"sal": rec.get("sal"),
+                      # ★ 写入侧也归一化（双保险）：读侧容错保证"旧数据能读"，
+                      #   写入侧归一保证"新数据不再产生脏类型"。
+                      #   两处都做是因为脏数据可能来自任何版本的旧索引 ——
+                      #   只修读侧等于永远在给历史数据擦屁股。
+                      "ts": _to_epoch(rec.get("ts"), 0.0),
                       "cat": rec.get("cat") or rec.get("category")},
             )
             changed += 1
@@ -233,12 +291,20 @@ class CognitionHub:
                 "brief": meta.get("text") or "",
                 "tags": meta.get("tags") or [],
                 "sal": inner.get("sal") or meta.get("sal") or 1,
+                # 这里保留原值不归一，归一交给 _to_epoch —— 因为既有 sidecar 索引里
+                # 可能存着**字符串 ts**（V1 写的可读时间），在构造 rec 时就地转型
+                # 会把"脏数据"静默洗掉、掩盖上游问题；放到使用点转型则一眼能看出
+                # "这个字段类型不受控"。
                 "ts": inner.get("ts") or meta.get("ts") or 0.0,
                 "cat": inner.get("cat") or meta.get("cat") or "",
                 "hits": self._rehearsal.get(h.key, 0),
                 "_key": h.key,
             }
-            ret = (self.curve.retention(max(0.0, now - float(rec["ts"] or now)),
+            # ★★ 原为 ``float(rec["ts"] or now)`` —— 假设 ts 一定是数字，
+            #    V1 写的可读时间字符串会让这里抛 ValueError、**整条召回崩掉**（0.6.6 回归）。
+            #    改用 _to_epoch：数字/数字串/可读时间都吃得下，实在解析不了就退回 now
+            #    （「当作刚写入」比「整条召回失效」合理得多）。
+            ret = (self.curve.retention(max(0.0, now - _to_epoch(rec["ts"] or now, now)),
                                         int(rec["sal"] or 1), int(rec["hits"]))
                    if use_forgetting else 1.0)
             sal_w = (0.6 + 0.1 * max(1, min(5, int(rec["sal"] or 1)))) / 1.1
